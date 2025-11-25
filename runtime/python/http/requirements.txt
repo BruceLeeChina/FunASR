@@ -4,3 +4,4 @@ fastapi>=0.95.1
 aiofiles
 uvicorn
 requests
+python-multipart

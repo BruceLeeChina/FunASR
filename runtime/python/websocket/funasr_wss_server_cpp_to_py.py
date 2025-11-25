@@ -8,68 +8,72 @@ import numpy as np
 import argparse
 import ssl
 
-
+# --- 使用你提供的 ONNX 模型列表，并修正了离线ASR模型 ---
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--host", type=str, default="0.0.0.0", required=False, help="host ip, localhost, 0.0.0.0"
 )
-parser.add_argument("--port", type=int, default=10095, required=False, help="grpc server port")
+parser.add_argument("--port", type=int, default=10097, required=False, help="grpc server port")
+
+# 修改模型配置为PyTorch版本
 parser.add_argument(
     "--asr_model",
     type=str,
-    default="iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-    help="model from modelscope",
+    default="damo/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+    help="Offline ASR model",
 )
-parser.add_argument("--asr_model_revision", type=str, default="v2.0.4", help="")
 parser.add_argument(
     "--asr_model_online",
     type=str,
-    default="iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online",
-    help="model from modelscope",
+    default="damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online",
+    help="Online ASR model",
 )
-parser.add_argument("--asr_model_online_revision", type=str, default="v2.0.4", help="")
 parser.add_argument(
     "--vad_model",
     type=str,
-    default="iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
-    help="model from modelscope",
+    default="damo/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+    help="VAD model",
 )
-parser.add_argument("--vad_model_revision", type=str, default="v2.0.4", help="")
 parser.add_argument(
     "--punc_model",
     type=str,
-    default="iic/punc_ct-transformer_zh-cn-common-vad_realtime-vocab272727",
-    help="model from modelscope",
+    default="damo/punc_ct-transformer_zh-cn-common-vad_realtime-vocab272727",
+    help="Punctuation model",
 )
+parser.add_argument("--asr_model_revision", type=str, default="v2.0.4", help="")
+parser.add_argument("--asr_model_online_revision", type=str, default="v2.0.4", help="")
+parser.add_argument("--vad_model_revision", type=str, default="v2.0.4", help="")
 parser.add_argument("--punc_model_revision", type=str, default="v2.0.4", help="")
+
+# ITN 和 LM 模型当前脚本未使用，但已在此处列出供参考
+# itn_dir="thuduj12/fst_itn_zh"
+# lm_dir="damo/speech_ngram_lm_zh-cn-ai-wesp-fst"
+
 parser.add_argument("--ngpu", type=int, default=1, help="0 for cpu, 1 for gpu")
 parser.add_argument("--device", type=str, default="cuda", help="cuda, cpu")
 parser.add_argument("--ncpu", type=int, default=4, help="cpu cores")
-# 修改为：
 parser.add_argument(
     "--certfile",
     type=str,
-    default=None, # <--- 改为 None
+    default=None,
     required=False,
     help="certfile for ssl",
 )
-
 parser.add_argument(
     "--keyfile",
     type=str,
-    default=None, # <--- 改为 None
+    default=None,
     required=False,
     help="keyfile for ssl",
 )
 args = parser.parse_args()
-
 
 websocket_users = set()
 
 print("model loading")
 from funasr import AutoModel
 
-# asr
+# asr (offline)
 model_asr = AutoModel(
     model=args.asr_model,
     model_revision=args.asr_model_revision,
@@ -79,7 +83,7 @@ model_asr = AutoModel(
     disable_pbar=True,
     disable_log=True,
 )
-# asr
+# asr (online)
 model_asr_streaming = AutoModel(
     model=args.asr_model_online,
     model_revision=args.asr_model_online_revision,
@@ -98,7 +102,6 @@ model_vad = AutoModel(
     device=args.device,
     disable_pbar=True,
     disable_log=True,
-    # chunk_size=60,
 )
 
 if args.punc_model != "":
@@ -113,7 +116,6 @@ if args.punc_model != "":
     )
 else:
     model_punc = None
-
 
 print("model loaded! only support one client at the same time now!!!!")
 
@@ -141,7 +143,6 @@ async def ws_serve(websocket):
     frames_asr = []
     frames_asr_online = []
     global websocket_users
-    # await clear_websocket()
     websocket_users.add(websocket)
     websocket.status_dict_asr = {}
     websocket.status_dict_asr_online = {"cache": {}, "is_final": False}
@@ -198,8 +199,8 @@ async def ws_serve(websocket):
                     frames_asr_online.append(message)
                     websocket.status_dict_asr_online["is_final"] = speech_end_i != -1
                     if (
-                        len(frames_asr_online) % websocket.chunk_interval == 0
-                        or websocket.status_dict_asr_online["is_final"]
+                            len(frames_asr_online) % websocket.chunk_interval == 0
+                            or websocket.status_dict_asr_online["is_final"]
                     ):
                         if websocket.mode == "2pass" or websocket.mode == "online":
                             audio_in = b"".join(frames_asr_online)
@@ -223,7 +224,6 @@ async def ws_serve(websocket):
                         frames_asr.extend(frames_pre)
                 # asr punc offline
                 if speech_end_i != -1 or not websocket.is_speaking:
-                    # print("vad end point")
                     if websocket.mode == "2pass" or websocket.mode == "offline":
                         audio_in = b"".join(frames_asr)
                         try:
@@ -252,10 +252,7 @@ async def ws_serve(websocket):
 
 
 async def async_vad(websocket, audio_in):
-
     segments_result = model_vad.generate(input=audio_in, **websocket.status_dict_vad)[0]["value"]
-    # print(segments_result)
-
     speech_start = -1
     speech_end = -1
 
@@ -268,19 +265,35 @@ async def async_vad(websocket, audio_in):
     return speech_start, speech_end
 
 
+# --- 带调试日志的 async_asr 函数 ---
 async def async_asr(websocket, audio_in):
     if len(audio_in) > 0:
-        # print(len(audio_in))
         rec_result = model_asr.generate(input=audio_in, **websocket.status_dict_asr)[0]
-        # print("offline_asr, ", rec_result)
+
+        # --- 调试日志 1: 检查 ASR 原始结果 ---
+        print(f"[DEBUG] ASR Raw Result: {rec_result}")
+
+        # --- 调试日志 2: 检查标点模型是否加载 ---
+        print(f"[DEBUG] Punctuation model loaded: {model_punc is not None}")
+
         if model_punc is not None and len(rec_result["text"]) > 0:
-            # print("offline, before punc", rec_result, "cache", websocket.status_dict_punc)
-            rec_result = model_punc.generate(
+            # --- 调试日志 3: 准备调用标点模型 ---
+            print(f"[DEBUG] Calling punctuation model with text: '{rec_result['text']}'")
+
+            punc_result = model_punc.generate(
                 input=rec_result["text"], **websocket.status_dict_punc
             )[0]
-            # print("offline, after punc", rec_result)
+
+            # --- 调试日志 4: 检查标点模型返回结果 ---
+            print(f"[DEBUG] Punctuation Model Result: {punc_result}")
+
+            # 更新最终结果为带标点的版本
+            rec_result = punc_result
+
         if len(rec_result["text"]) > 0:
-            # print("offline", rec_result)
+            # --- 调试日志 5: 最终要发送的文本 ---
+            print(f"[DEBUG] Final text to send: '{rec_result['text']}'")
+
             mode = "2pass-offline" if "2pass" in websocket.mode else websocket.mode
             message = json.dumps(
                 {
@@ -302,18 +315,16 @@ async def async_asr(websocket, audio_in):
                 "is_final": websocket.is_speaking,
             }
         )
-        await websocket.send(message)    
+        await websocket.send(message)
+
 
 async def async_asr_online(websocket, audio_in):
     if len(audio_in) > 0:
-        # print(websocket.status_dict_asr_online.get("is_final", False))
         rec_result = model_asr_streaming.generate(
             input=audio_in, **websocket.status_dict_asr_online
         )[0]
-        # print("online, ", rec_result)
         if websocket.mode == "2pass" and websocket.status_dict_asr_online.get("is_final", False):
             return
-            #     websocket.status_dict_asr_online["cache"] = dict()
         if len(rec_result["text"]):
             mode = "2pass-online" if "2pass" in websocket.mode else websocket.mode
             message = json.dumps(
@@ -327,10 +338,8 @@ async def async_asr_online(websocket, audio_in):
             await websocket.send(message)
 
 
-# ... (前面的代码保持不变)
-
 async def main():
-    if args.certfile and args.keyfile: # <--- 修改这里:
+    if args.certfile and args.keyfile:
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ssl_cert = args.certfile
         ssl_key = args.keyfile

@@ -6,7 +6,8 @@
 
 ```shell
 cd funasr/runtime/python/http
-pip install -r requirements.txt
+pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+pip install python-multipart -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
 2. Start server
