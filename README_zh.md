@@ -1,3 +1,119 @@
+docker一键启动：
+
+# 1. 拉取镜像（如果尚未拉取）
+sudo docker pull registry.cn-hangzhou.aliyuncs.com/funasr_repo/funasr:funasr-runtime-sdk-online-cpu-0.1.13
+
+# 2. 创建模型目录（如果尚未创建）
+mkdir -p /opt/funasr
+cd /opt/funasr && mkdir -p ./funasr-runtime-resources/models
+
+# 3. 后台启动容器并自动运行服务
+sudo docker run -p 10095:10095 -d --name funasr-server \
+  --privileged=true \
+  -v $PWD/funasr-runtime-resources/models:/workspace/models \
+  registry.cn-hangzhou.aliyuncs.com/funasr_repo/funasr:funasr-runtime-sdk-online-cpu-0.1.13 \
+  bash -c "cd /workspace/FunASR/runtime && \
+  nohup bash run_server_2pass.sh \
+    --download-model-dir /workspace/models \
+    --vad-dir damo/speech_fsmn_vad_zh-cn-16k-common-onnx \
+    --model-dir damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-onnx \
+    --online-model-dir damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online-onnx \
+    --punc-dir damo/punc_ct-transformer_zh-cn-common-vad_realtime-vocab272727-onnx \
+    --itn-dir thuduj12/fst_itn_zh \
+    --hotword /workspace/models/hotwords.txt > /dev/null 2>&1 & \
+  sleep infinity"
+
+[//]: # (日志)
+sudo docker run -p 10095:10095 -d --name funasr-server \
+  --privileged=true \
+  -v $PWD/funasr-runtime-resources/models:/workspace/models \
+  registry.cn-hangzhou.aliyuncs.com/funasr_repo/funasr:funasr-runtime-sdk-online-cpu-0.1.13 \
+  bash -c "cd /workspace/FunASR/runtime && \
+  exec bash run_server_2pass.sh \
+    --download-model-dir /workspace/models \
+    --vad-dir damo/speech_fsmn_vad_zh-cn-16k-common-onnx \
+    --model-dir damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-onnx \
+    --online-model-dir damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online-onnx \
+    --punc-dir damo/punc_ct-transformer_zh-cn-common-vad_realtime-vocab272727-onnx \
+    --itn-dir thuduj12/fst_itn_zh \
+    --hotword /workspace/models/hotwords.txt 2>&1 | tee /var/log/funasr.log"
+
+
+
+访问： 火狐浏览器 
+静态页面访问： https://192.168.21.130:84/
+
+websocket：wss://192.168.21.130:10095/
+证书验证绕过：https://192.168.21.130:10095/
+
+
+
+
+测试代理： /opt/emergency/nginx/html/funasr/static 挂载目录 /usr/share/nginx/html/funasr/static （runtime/html5）
+# 在 http 块内添加以下 server 配置（可以放在现有 server 配置旁边）
+# 在 http 块内添加以下 server 配置（可以放在现有 server 配置旁边）
+server {
+    listen       84;
+    server_name  192.168.21.130;
+
+    # 设置根目录为新的静态资源路径
+    root /usr/share/nginx/html/funasr/static;
+    
+    # 默认首页
+    index index.html;
+
+    # 静态资源缓存设置
+    expires 1d;
+    add_header Cache-Control "public, no-transform";
+
+    # 处理所有请求 - 单页应用配置
+    location / {
+        # 单页应用路由回退：如果请求的文件不存在，则返回 index.html
+        try_files $uri $uri/ /index.html;
+        
+        # 添加 CORS 头（如果不需要可以移除）
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type' always;
+    }
+
+    # 处理静态资源（CSS、JS、图片等）
+    location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|mp3|wav|txt|json)$ {
+        # 静态资源使用更长的缓存时间
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        
+        # 尝试直接访问文件，如果不存在则不回退到 index.html
+        try_files $uri =404;
+    }
+
+    # 处理音频等大文件
+    location ~* \.(mp3|wav|ogg|flac)$ {
+        expires max;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # 处理 OPTIONS 预检请求
+    if ($request_method = OPTIONS) {
+        add_header 'Access-Control-Allow-Origin' '*';
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+        add_header 'Access-Control-Allow-Headers' 'DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type';
+        add_header 'Access-Control-Max-Age' 1728000;
+        return 204;
+    }
+
+    # 错误页面处理
+    error_page 404 /index.html;
+    error_page 500 502 503 504 /50x.html;
+    
+    location = /50x.html {
+        root /usr/share/nginx/html;
+    }
+}
+
+
+===============================================================================================================================================================================================================================================================
 [//]: # (<div align="left"><img src="docs/images/funasr_logo.jpg" width="400"/></div>)
 
 (简体中文|[English](./README.md))

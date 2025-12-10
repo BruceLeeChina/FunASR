@@ -49,7 +49,7 @@ parser.add_argument("--ncpu", type=int, default=4, help="cpu cores")
 parser.add_argument(
     "--certfile",
     type=str,
-    default="../../ssl_key/server.crt",
+    default=None, # <--- 改为 None
     required=False,
     help="certfile for ssl",
 )
@@ -57,7 +57,7 @@ parser.add_argument(
 parser.add_argument(
     "--keyfile",
     type=str,
-    default="../../ssl_key/server.key",
+    default=None, # <--- 改为 None
     required=False,
     help="keyfile for ssl",
 )
@@ -180,7 +180,7 @@ async def ws_serve(websocket):
                     websocket.status_dict_asr_online["decoder_chunk_look_back"] = messagejson[
                         "decoder_chunk_look_back"
                     ]
-                if "hotword" in messagejson:
+                if "hotwords" in messagejson:
                     websocket.status_dict_asr["hotword"] = messagejson["hotwords"]
                 if "mode" in messagejson:
                     websocket.mode = messagejson["mode"]
@@ -339,7 +339,7 @@ async def main():
         async with websockets.serve(
                 ws_serve, args.host, args.port, subprotocols=["binary"], ping_interval=None, ssl=ssl_context
         ):
-            print(f"WebSocket server started (secure) at wss://{args.host}:{args.port}")
+            print(f"WebSocket server started (secure) at ws://{args.host}:{args.port}")
             await asyncio.Future()  # run forever
     else:
         async with websockets.serve(
