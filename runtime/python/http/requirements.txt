@@ -1,3 +1,14 @@
+fastapi
+uvicorn
+modelscope
+funasr
+ffmpeg-python
+argparse
+logging
+uuid
+aiofiles
+aiohttp
+asyncio
 modelscope>=1.11.1
 funasr>=1.0.5
 fastapi>=0.95.1
