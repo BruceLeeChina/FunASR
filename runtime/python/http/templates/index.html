@@ -1,0 +1,3036 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FunASR 离线文本识别系统</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', Arial, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            color: white;
+            padding: 25px 35px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            box-shadow: 0 6px 15px rgba(46, 125, 50, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 100%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+            opacity: 0.3;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            position: relative;
+        }
+
+        .header p {
+            margin: 8px 0 0;
+            opacity: 0.9;
+            font-size: 16px;
+            font-weight: 300;
+            position: relative;
+        }
+
+        .nav-tabs {
+            display: flex;
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 18px 25px;
+            background: none;
+            border: none;
+            font-size: 16px;
+            font-weight: 500;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            border-bottom: 3px solid transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .tab-button:hover {
+            background-color: #f8f9fa;
+            color: #4CAF50;
+            transform: translateY(-2px);
+        }
+
+        .tab-button.active {
+            color: #4CAF50;
+            border-bottom-color: #4CAF50;
+            background-color: rgba(76, 175, 80, 0.05);
+            font-weight: 600;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeInUp {
+            from { 
+                opacity: 0; 
+                transform: translateY(20px); 
+            }
+            to { 
+                opacity: 1; 
+                transform: translateY(0); 
+            }
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 25px;
+        }
+
+        .panel {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.06);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .panel:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .panel h2 {
+            color: #2E7D32;
+            margin-top: 0;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e8f5e9;
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #444;
+            font-size: 15px;
+        }
+
+        .form-group .sub-label {
+            font-size: 13px;
+            color: #777;
+            margin-top: 5px;
+            font-weight: 400;
+        }
+
+        input[type="file"], input[type="text"], input[type="url"], input[type="number"], textarea, select {
+            width: 100%;
+            padding: 14px 18px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+            background: #fafafa;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #4CAF50;
+            background: white;
+            box-shadow: 0 0 0 4px rgba(76, 175, 80, 0.15);
+        }
+
+        .input-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 25px;
+        }
+
+        button {
+            padding: 14px 28px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            min-width: 120px;
+        }
+
+        button i {
+            font-size: 16px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(76, 175, 80, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(33, 150, 243, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(244, 67, 54, 0.4);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+            color: white;
+        }
+
+        .btn-warning:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(255, 152, 0, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(76, 175, 80, 0.4);
+        }
+
+        .result {
+            margin-top: 30px;
+            padding: 25px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            border-left: 5px solid #4CAF50;
+            max-height: 500px;
+            overflow-y: auto;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .result-title {
+            font-weight: 700;
+            color: #2E7D32;
+            margin-bottom: 15px;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        pre {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
+            font-size: 14px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Consolas', 'Monaco', monospace;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin: 0 5px;
+            gap: 5px;
+        }
+
+        .status-pending { 
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); 
+            color: #856404; 
+            border: 1px solid #ffeaa7;
+        }
+
+        .status-processing { 
+            background: linear-gradient(135deg, #cce5ff 0%, #b3d7ff 100%); 
+            color: #004085; 
+            border: 1px solid #b3d7ff;
+        }
+
+        .status-completed { 
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); 
+            color: #155724; 
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-failed { 
+            background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%); 
+            color: #721c24; 
+            border: 1px solid #f5c6cb;
+        }
+
+        .status-canceled { 
+            background: linear-gradient(135deg, #e2e3e5 0%, #d6d8db 100%); 
+            color: #383d41; 
+            border: 1px solid #d6d8db;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin-top: 20px;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        }
+
+        th {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 18px 20px;
+            text-align: left;
+            font-weight: 700;
+            color: #444;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        td {
+            padding: 16px 20px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        tr:hover {
+            background-color: rgba(76, 175, 80, 0.03);
+        }
+
+        .task-id {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            color: #666;
+            background: #f8f9fa;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .file-list-container {
+            max-height: 450px;
+            overflow-y: auto;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 20px;
+            background: #fafafa;
+        }
+
+        .file-list-item {
+            background: white;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .file-list-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            padding: 25px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 20px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-item:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-value {
+            font-size: 36px;
+            font-weight: 800;
+            color: #4CAF50;
+            margin-bottom: 8px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-label {
+            font-size: 15px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .nav-tabs {
+                flex-direction: column;
+            }
+
+            .tab-button {
+                padding: 15px;
+                border-bottom: 1px solid #eee;
+            }
+
+            .input-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            button {
+                width: 100%;
+            }
+
+            .stats {
+                grid-template-columns: 1fr;
+            }
+
+            .header {
+                padding: 20px;
+            }
+
+            .panel {
+                padding: 20px;
+            }
+        }
+
+        .loading {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(76, 175, 80, 0.1);
+            border-top: 3px solid #4CAF50;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .upload-method {
+            transition: all 0.5s ease;
+        }
+
+        .method-selector {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .method-selector button {
+            flex: 1;
+            padding: 18px;
+            font-size: 16px;
+        }
+
+        .success-message {
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .error-message {
+            background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .json-viewer {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .copy-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 5px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .copy-button:hover {
+            background: white;
+            border-color: #4CAF50;
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="header">
+        <h1><i class="fas fa-microphone-alt"></i> FunASR 离线文本识别系统</h1>
+        <p>基于阿里达摩院FunASR模型的语音识别服务接口 | 稳定 · 高效 · 易用</p>
+    </div>
+
+    <div class="stats">
+        <div class="stat-item">
+            <div class="stat-value" id="totalTasks">0</div>
+            <div class="stat-label">总任务数</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value" id="completedTasks">0</div>
+            <div class="stat-label">已完成</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value" id="processingTasks">0</div>
+            <div class="stat-label">处理中</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value" id="pendingTasks">0</div>
+            <div class="stat-label">待处理</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value" id="failedTasks">0</div>
+            <div class="stat-label">失败任务</div>
+        </div>
+    </div>
+
+    <div class="nav-tabs">
+        <button class="tab-button active" data-tab="singleTaskTab">
+            <i class="fas fa-paper-plane"></i> 单任务提交
+        </button>
+        <button class="tab-button" data-tab="taskManagementTab">
+            <i class="fas fa-tasks"></i> 任务管理
+        </button>
+        <button class="tab-button" data-tab="batchOperationTab">
+            <i class="fas fa-layer-group"></i> 批量操作
+        </button>
+        <button class="tab-button" data-tab="taskListTab">
+            <i class="fas fa-list-alt"></i> 任务列表
+        </button>
+    </div>
+
+    <!-- 单任务提交标签页 -->
+    <div id="singleTaskTab" class="tab-content active">
+        <div class="container">
+            <div class="panel">
+                <h2><i class="fas fa-paper-plane"></i> 单任务提交</h2>
+
+                <div class="method-selector">
+                    <button class="btn-primary" id="fileUploadBtn">
+                        <i class="fas fa-file-upload"></i> 文件上传
+                    </button>
+                    <button class="btn-secondary" id="urlUploadBtn">
+                        <i class="fas fa-link"></i> URL提交
+                    </button>
+                </div>
+
+                <!-- 文件上传方式 -->
+                <div id="fileUploadMethod" class="upload-method">
+                    <div class="form-group">
+                        <label for="fileUpload"><i class="fas fa-file-audio"></i> 选择音频文件</label>
+                        <div id="fileDropZone" style="border: 2px dashed #4CAF50; border-radius: 10px; padding: 30px; text-align: center; cursor: pointer;">
+                            <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: #4CAF50; margin-bottom: 15px;"></i>
+                            <p style="font-size: 16px; color: #666; margin-bottom: 10px;">点击选择或拖放音频文件</p>
+                            <p style="font-size: 14px; color: #888;">支持 wav, mp3, m4a, aac, flac, ogg 等格式</p>
+                            <input type="file" id="fileUpload" accept="audio/*,video/*" style="display: none;">
+                        </div>
+                        <div id="selectedFileName" style="margin-top: 15px; padding: 10px; background: #f0f9f0; border-radius: 6px; border: 1px solid #c8e6c9; display: none;">
+                            <i class="fas fa-file-audio" style="color: #4CAF50;"></i>
+                            <span id="fileNameDisplay" style="margin-left: 10px;"></span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-cogs"></i> 可选参数</label>
+                        <div class="input-grid">
+                            <div>
+                                <label for="callbackUrl"><i class="fas fa-bell"></i> 回调URL</label>
+                                <input type="url" id="callbackUrl" placeholder="https://example.com/callback">
+                            </div>
+                            <div>
+                                <label for="appId"><i class="fas fa-id-card"></i> 应用ID</label>
+                                <input type="text" id="appId" placeholder="如: my_app">
+                            </div>
+                            <div>
+                                <label for="bizType"><i class="fas fa-tag"></i> 业务类型</label>
+                                <input type="text" id="bizType" placeholder="如: speech_recognition">
+                            </div>
+                            <div>
+                                <label for="bizUniqueId"><i class="fas fa-fingerprint"></i> 业务唯一ID</label>
+                                <input type="text" id="bizUniqueId" placeholder="如: request_001">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="button-group">
+                        <button class="btn-primary" id="submitFileUploadBtn">
+                            <i class="fas fa-paper-plane"></i> 提交任务
+                        </button>
+                        <button class="btn-secondary" id="clearFileFormBtn">
+                            <i class="fas fa-redo"></i> 清空表单
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 文件URL方式 -->
+                <div id="urlUploadMethod" class="upload-method" style="display: none;">
+                    <div class="form-group">
+                        <label for="fileUrl"><i class="fas fa-link"></i> 音频文件URL</label>
+                        <input type="url" id="fileUrl" placeholder="https://example.com/audio.wav" style="padding-left: 50px;">
+                        <div class="sub-label">支持HTTP/HTTPS链接，服务器会自动下载文件进行识别</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="fileName"><i class="fas fa-file-alt"></i> 文件名（可选）</label>
+                        <input type="text" id="fileName" placeholder="如: audio.wav">
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-cogs"></i> 可选参数</label>
+                        <div class="input-grid">
+                            <div>
+                                <label for="callbackUrl2"><i class="fas fa-bell"></i> 回调URL</label>
+                                <input type="url" id="callbackUrl2" placeholder="https://example.com/callback">
+                            </div>
+                            <div>
+                                <label for="appId2"><i class="fas fa-id-card"></i> 应用ID</label>
+                                <input type="text" id="appId2" placeholder="如: my_app">
+                            </div>
+                            <div>
+                                <label for="bizType2"><i class="fas fa-tag"></i> 业务类型</label>
+                                <input type="text" id="bizType2" placeholder="如: speech_recognition">
+                            </div>
+                            <div>
+                                <label for="bizUniqueId2"><i class="fas fa-fingerprint"></i> 业务唯一ID</label>
+                                <input type="text" id="bizUniqueId2" placeholder="如: request_001">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="button-group">
+                        <button class="btn-primary" id="submitFileUrlBtn">
+                            <i class="fas fa-paper-plane"></i> 提交任务
+                        </button>
+                        <button class="btn-secondary" onclick="clearUrlForm()">
+                            <i class="fas fa-redo"></i> 清空表单
+                        </button>
+                    </div>
+                </div>
+
+                <div class="result" id="singleTaskResult">
+                    <div class="result-title"><i class="fas fa-clipboard-check"></i> 提交结果</div>
+                    <div id="singleTaskResultContent" style="min-height: 100px;">
+                        <p style="text-align: center; color: #999; padding: 40px 0;">提交任务后，结果将显示在这里</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 任务管理标签页 -->
+    <div id="taskManagementTab" class="tab-content">
+        <div class="container">
+            <div class="panel">
+                <h2><i class="fas fa-tasks"></i> 任务管理</h2>
+
+                <div class="form-group">
+                    <label for="taskId"><i class="fas fa-key"></i> 任务ID</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="taskId" placeholder="输入任务ID进行管理" style="flex: 1;">
+                        <button class="btn-secondary" onclick="pasteFromClipboard('taskId')">
+                            <i class="fas fa-paste"></i> 粘贴
+                        </button>
+                    </div>
+                    <div class="sub-label">您可以在提交任务后获取到任务ID，或从任务列表中复制</div>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn-primary" onclick="getTaskStatus()">
+                        <i class="fas fa-search"></i> 查询状态
+                    </button>
+                    <button class="btn-secondary" onclick="getTaskResult()">
+                        <i class="fas fa-file-alt"></i> 查询结果
+                    </button>
+                    <button class="btn-warning" onclick="cancelTask()">
+                        <i class="fas fa-ban"></i> 取消任务
+                    </button>
+                    <button class="btn-danger" onclick="deleteTask()">
+                        <i class="fas fa-trash"></i> 删除任务
+                    </button>
+                </div>
+
+                <div style="margin-top: 30px; border-top: 2px solid #f0f0f0; padding-top: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleAdvancedQuery()">
+                        <h3 style="color: #4CAF50; margin: 0; display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-search-plus"></i> 高级查询
+                        </h3>
+                        <i class="fas fa-chevron-down" id="advancedQueryToggleIcon"></i>
+                    </div>
+
+                    <div id="advancedQueryContent" style="display: none; margin-top: 20px;">
+                        <div class="input-grid">
+                            <div>
+                                <label for="advancedBizUniqueId"><i class="fas fa-fingerprint"></i> 业务唯一ID</label>
+                                <input type="text" id="advancedBizUniqueId" placeholder="输入业务唯一ID">
+                            </div>
+                            <div>
+                                <label for="advancedAppId"><i class="fas fa-filter"></i> 应用ID</label>
+                                <input type="text" id="advancedAppId" placeholder="输入应用ID">
+                            </div>
+                            <div>
+                                <label for="advancedBizType"><i class="fas fa-tags"></i> 业务类型</label>
+                                <input type="text" id="advancedBizType" placeholder="输入业务类型">
+                            </div>
+                        </div>
+
+                        <div class="button-group" style="margin-top: 20px;">
+                            <button class="btn-primary" onclick="advancedSearch()">
+                                <i class="fas fa-search"></i> 执行高级查询
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="result" id="taskManagementResult" style="margin-top: 40px;">
+                    <div class="result-title"><i class="fas fa-info-circle"></i> 任务信息</div>
+                    <div id="taskManagementResultContent" style="min-height: 100px;">
+                        <p style="text-align: center; color: #999; padding: 40px 0;">查询任务后，详细信息将显示在这里</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量操作标签页 -->
+    <div id="batchOperationTab" class="tab-content">
+        <div class="container">
+            <div class="panel">
+                <h2><i class="fas fa-layer-group"></i> 批量操作</h2>
+
+                <div class="form-group">
+                    <h3 style="color: #4CAF50; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-file-import"></i> 批量提交任务
+                    </h3>
+                    <label>添加任务文件列表（最多50个）</label>
+
+                    <div class="file-list-container">
+                        <div id="batchFileList">
+                            <div class="file-list-item" data-index="0">
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                                    <div>
+                                        <label>文件URL *</label>
+                                        <input type="url" class="batch-file-url" placeholder="https://example.com/audio.wav" required>
+                                    </div>
+                                    <div>
+                                        <label>文件名（可选）</label>
+                                        <input type="text" class="batch-file-name" placeholder="如: audio.wav">
+                                    </div>
+                                    <div>
+                                        <label>回调URL（可选）</label>
+                                        <input type="url" class="batch-callback-url" placeholder="https://example.com/callback">
+                                    </div>
+                                    <div>
+                                        <label>应用ID（可选）</label>
+                                        <input type="text" class="batch-app-id" placeholder="如: my_app">
+                                    </div>
+                                    <div>
+                                        <label>业务类型（可选）</label>
+                                        <input type="text" class="batch-biz-type" placeholder="如: speech_recognition">
+                                    </div>
+                                    <div>
+                                        <label>业务唯一ID（可选）</label>
+                                        <input type="text" class="batch-biz-unique-id" placeholder="如: batch_001">
+                                    </div>
+                                </div>
+                                <div style="margin-top: 15px; text-align: right;">
+                                    <button class="btn-danger" onclick="removeBatchRow(this)" style="padding: 8px 15px;">
+                                        <i class="fas fa-trash"></i> 删除此行
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="button-group" style="margin-top: 20px;">
+                        <button class="btn-primary" onclick="addBatchRow()">
+                            <i class="fas fa-plus"></i> 添加一行
+                        </button>
+                        <button class="btn-success" onclick="batchSubmitJson()">
+                            <i class="fas fa-paper-plane"></i> 批量提交
+                        </button>
+                        <button class="btn-secondary" onclick="clearBatchForm()">
+                            <i class="fas fa-redo"></i> 清空列表
+                        </button>
+                        <button class="btn-warning" onclick="importFromText()">
+                            <i class="fas fa-file-import"></i> 从文本导入
+                        </button>
+                    </div>
+                </div>
+
+                <div class="result" id="batchSubmitResult" style="margin-top: 30px;">
+                    <div class="result-title"><i class="fas fa-clipboard-list"></i> 批量提交结果</div>
+                    <div id="batchSubmitResultContent" style="min-height: 100px;">
+                        <p style="text-align: center; color: #999; padding: 40px 0;">批量提交后，结果将显示在这里</p>
+                    </div>
+                </div>
+
+                <div style="margin-top: 40px; padding-top: 30px; border-top: 2px solid #f0f0f0;">
+                    <h3 style="color: #4CAF50; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-cogs"></i> 批量管理任务
+                    </h3>
+
+                    <div class="form-group">
+                        <label for="batchTaskIds"><i class="fas fa-list-ol"></i> 任务ID列表（逗号分隔）</label>
+                        <textarea id="batchTaskIds" rows="4" placeholder="请输入多个任务ID，用逗号分隔，例如：
+task_001, task_002, task_003
+最多可同时处理100个任务ID，建议先使用任务列表功能复制任务ID"></textarea>
+                    </div>
+
+                    <div class="button-group">
+                        <button class="btn-primary" onclick="batchGetStatus()">
+                            <i class="fas fa-search"></i> 批量查状态
+                        </button>
+                        <button class="btn-secondary" onclick="batchGetResult()">
+                            <i class="fas fa-file-alt"></i> 批量查结果
+                        </button>
+                        <button class="btn-warning" onclick="batchCancel()">
+                            <i class="fas fa-ban"></i> 批量取消
+                        </button>
+                        <button class="btn-danger" onclick="batchDelete()">
+                            <i class="fas fa-trash"></i> 批量删除
+                        </button>
+                    </div>
+                </div>
+
+                <div class="result" id="batchOperationResult" style="margin-top: 30px;">
+                    <div class="result-title"><i class="fas fa-chart-bar"></i> 批量操作结果</div>
+                    <div id="batchOperationResultContent" style="min-height: 100px;">
+                        <p style="text-align: center; color: #999; padding: 40px 0;">批量操作后，结果将显示在这里</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 任务列表标签页 -->
+    <div id="taskListTab" class="tab-content">
+        <div class="container">
+            <div class="panel">
+                <h2><i class="fas fa-list-alt"></i> 任务列表</h2>
+
+                <div class="form-group">
+                    <label><i class="fas fa-filter"></i> 筛选选项</label>
+                    <div class="input-grid">
+                        <div>
+                            <label for="filterStatus">任务状态</label>
+                            <select id="filterStatus">
+                                <option value="">全部状态</option>
+                                <option value="pending">待处理</option>
+                                <option value="processing">处理中</option>
+                                <option value="completed">已完成</option>
+                                <option value="failed">失败</option>
+                                <option value="canceled">已取消</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="filterTaskType">任务类型</label>
+                            <select id="filterTaskType">
+                                <option value="">全部类型</option>
+                                <option value="file_upload">文件上传</option>
+                                <option value="file_url">文件URL</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="filterPageSize">每页显示</label>
+                            <select id="filterPageSize">
+                                <option value="10">10条</option>
+                                <option value="20" selected>20条</option>
+                                <option value="50">50条</option>
+                                <option value="100">100条</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="filterDateRange">时间范围</label>
+                            <select id="filterDateRange">
+                                <option value="">全部时间</option>
+                                <option value="1">最近1小时</option>
+                                <option value="24">最近24小时</option>
+                                <option value="168">最近7天</option>
+                                <option value="720">最近30天</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn-primary" onclick="refreshTaskList()">
+                        <i class="fas fa-sync-alt"></i> 刷新列表
+                    </button>
+                    <button class="btn-secondary" onclick="exportTaskList()">
+                        <i class="fas fa-download"></i> 导出列表
+                    </button>
+                    <button class="btn-warning" onclick="clearAllTasks()">
+                        <i class="fas fa-trash-alt"></i> 清空任务
+                    </button>
+                    <button class="btn-success" onclick="copyAllTaskIds()">
+                        <i class="fas fa-copy"></i> 复制ID列表
+                    </button>
+                </div>
+
+                <div style="margin-top: 25px;">
+                    <div id="taskListLoading" style="text-align: center; padding: 40px; display: none;">
+                        <div class="loading" style="width: 40px; height: 40px; margin: 0 auto 20px;"></div>
+                        <div style="font-size: 16px; color: #4CAF50;">正在加载任务列表...</div>
+                    </div>
+
+                    <div id="taskListContent">
+                        <!-- 任务列表将在这里显示 -->
+                    </div>
+
+                    <div id="taskListPagination" style="margin-top: 30px; text-align: center;">
+                        <!-- 分页按钮将在这里显示 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p style="font-size: 15px; margin-bottom: 10px; font-weight: 500;">
+            <i class="fas fa-copyright"></i> 2023 FunASR 离线文本识别系统 | 版本 2.0.0
+        </p>
+        <p style="font-size: 14px; color: #777; max-width: 800px; margin: 0 auto;">
+            基于阿里达摩院 FunASR 模型，提供稳定、高效、可靠的语音识别服务。支持多格式音频文件，具备任务队列管理和批量处理能力。
+        </p>
+        <div style="margin-top: 15px; display: flex; justify-content: center; gap: 20px;">
+            <span style="font-size: 13px; color: #4CAF50;">
+                <i class="fas fa-server"></i> 服务器状态: <span id="serverStatus">正常</span>
+            </span>
+            <span style="font-size: 13px; color: #2196F3;">
+                <i class="fas fa-clock"></i> 当前时间: <span id="currentTime"></span>
+            </span>
+            <span style="font-size: 13px; color: #FF9800;">
+                <i class="fas fa-database"></i> 内存数据库: 运行中
+            </span>
+        </div>
+    </div>
+
+    <script>
+        // 标签页切换功能
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', () => {
+                // 移除所有标签页的active类
+                document.querySelectorAll('.tab-button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+
+                // 隐藏所有标签页内容
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+
+                // 激活当前标签页
+                button.classList.add('active');
+                const tabId = button.getAttribute('data-tab');
+                document.getElementById(tabId).classList.add('active');
+
+                // 如果是任务列表标签页，刷新列表
+                if (tabId === 'taskListTab') {
+                    refreshTaskList();
+                }
+            });
+        });
+
+        // 页面加载时初始化事件监听器
+        document.addEventListener('DOMContentLoaded', function() {
+            // 为文件上传和URL上传按钮添加事件监听器
+            const fileUploadBtn = document.getElementById('fileUploadBtn');
+            if (fileUploadBtn) {
+                fileUploadBtn.addEventListener('click', function() {
+                    showUploadMethod('file');
+                });
+            }
+            
+            const urlUploadBtn = document.getElementById('urlUploadBtn');
+            if (urlUploadBtn) {
+                urlUploadBtn.addEventListener('click', function() {
+                    showUploadMethod('url');
+                });
+            }
+            
+            // 为文件选择输入框添加change事件监听器
+            const fileUpload = document.getElementById('fileUpload');
+            if (fileUpload) {
+                fileUpload.addEventListener('change', updateFileName);
+            }
+            
+            // 为文件拖放区域添加点击事件，触发文件选择
+            const fileDropZone = document.getElementById('fileDropZone');
+            if (fileDropZone) {
+                fileDropZone.addEventListener('click', function() {
+                    if (fileUpload) {
+                        fileUpload.click();
+                    }
+                });
+            }
+            
+            // 阻止文件名显示区域的点击事件冒泡
+            const selectedFileName = document.getElementById('selectedFileName');
+            if (selectedFileName) {
+                selectedFileName.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            }
+            
+            // 阻止可选参数输入框的点击事件冒泡
+            const optionalParamsInputs = document.querySelectorAll('#fileUploadMethod input');
+            optionalParamsInputs.forEach(input => {
+                input.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            });
+            
+            // 阻止可选参数标签的点击事件冒泡
+            const optionalParamsLabels = document.querySelectorAll('#fileUploadMethod label');
+            optionalParamsLabels.forEach(label => {
+                label.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            });
+            
+            // 阻止表单按钮的点击事件冒泡
+            const formButtons = document.querySelectorAll('#fileUploadMethod button, #urlUploadMethod button');
+            formButtons.forEach(button => {
+                button.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            });
+            
+            // 为URL提交方式的输入框添加点击事件冒泡阻止
+            const urlParamsInputs = document.querySelectorAll('#urlUploadMethod input');
+            urlParamsInputs.forEach(input => {
+                input.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            });
+            
+            // 为URL提交方式的标签添加点击事件冒泡阻止
+            const urlParamsLabels = document.querySelectorAll('#urlUploadMethod label');
+            urlParamsLabels.forEach(label => {
+                label.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            });
+            
+            // 为清空表单按钮添加点击事件监听器
+            const clearFileFormBtn = document.getElementById('clearFileFormBtn');
+            if (clearFileFormBtn) {
+                clearFileFormBtn.addEventListener('click', clearFileForm);
+            }
+            
+            const clearUrlFormBtn = document.getElementById('clearUrlFormBtn');
+            if (clearUrlFormBtn) {
+                clearUrlFormBtn.addEventListener('click', clearUrlForm);
+            }
+            
+            const submitFileUploadBtn = document.getElementById('submitFileUploadBtn');
+            if (submitFileUploadBtn) {
+                submitFileUploadBtn.addEventListener('click', submitFileUpload);
+            }
+            
+            const submitFileUrlBtn = document.getElementById('submitFileUrlBtn');
+            if (submitFileUrlBtn) {
+                submitFileUrlBtn.addEventListener('click', submitFileUrl);
+            }
+        });
+
+        // 上传方式切换
+        function showUploadMethod(method) {
+            const fileMethod = document.getElementById('fileUploadMethod');
+            const urlMethod = document.getElementById('urlUploadMethod');
+            const fileButtons = document.querySelectorAll('.method-selector button');
+
+            if (fileMethod && urlMethod && fileButtons.length >= 2) {
+                if (method === 'file') {
+                    fileMethod.style.display = 'block';
+                    urlMethod.style.display = 'none';
+                    fileButtons[0].className = 'btn-primary';
+                    fileButtons[1].className = 'btn-secondary';
+                } else {
+                    fileMethod.style.display = 'none';
+                    urlMethod.style.display = 'block';
+                    fileButtons[0].className = 'btn-secondary';
+                    fileButtons[1].className = 'btn-primary';
+                }
+            }
+        }
+
+        // 更新文件名显示
+        function updateFileName() {
+            const fileInput = document.getElementById('fileUpload');
+            const fileNameDisplay = document.getElementById('fileNameDisplay');
+            const selectedFileDiv = document.getElementById('selectedFileName');
+
+            if (fileInput && fileNameDisplay && selectedFileDiv && fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                fileNameDisplay.textContent = `${file.name} (${formatFileSize(file.size)})`;
+                selectedFileDiv.style.display = 'block';
+            }
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 清空文件表单
+        function clearFileForm() {
+            const fileUpload = document.getElementById('fileUpload');
+            if (fileUpload) fileUpload.value = '';
+            
+            const appId = document.getElementById('appId');
+            if (appId) appId.value = '';
+            
+            const bizType = document.getElementById('bizType');
+            if (bizType) bizType.value = '';
+            
+            const bizUniqueId = document.getElementById('bizUniqueId');
+            if (bizUniqueId) bizUniqueId.value = '';
+            
+            const callbackUrl = document.getElementById('callbackUrl');
+            if (callbackUrl) callbackUrl.value = '';
+            
+            const selectedFileName = document.getElementById('selectedFileName');
+            if (selectedFileName) selectedFileName.style.display = 'none';
+            
+            const singleTaskResultContent = document.getElementById('singleTaskResultContent');
+            if (singleTaskResultContent) {
+                singleTaskResultContent.innerHTML = '<p style="text-align: center; color: #999; padding: 40px 0;">提交任务后，结果将显示在这里</p>';
+            }
+        }
+        
+        // 高级查询折叠/展开功能
+        function toggleAdvancedQuery() {
+            const advancedQueryContent = document.getElementById('advancedQueryContent');
+            const toggleIcon = document.getElementById('advancedQueryToggleIcon');
+            
+            if (advancedQueryContent && toggleIcon) {
+                if (advancedQueryContent.style.display === 'none') {
+                    advancedQueryContent.style.display = 'block';
+                    toggleIcon.className = 'fas fa-chevron-up';
+                } else {
+                    advancedQueryContent.style.display = 'none';
+                    toggleIcon.className = 'fas fa-chevron-down';
+                }
+            }
+        }
+
+        // 清空URL表单
+        function clearUrlForm() {
+            const fileUrl = document.getElementById('fileUrl');
+            if (fileUrl) fileUrl.value = '';
+            
+            const fileName = document.getElementById('fileName');
+            if (fileName) fileName.value = '';
+            
+            const appId2 = document.getElementById('appId2');
+            if (appId2) appId2.value = '';
+            
+            const bizType2 = document.getElementById('bizType2');
+            if (bizType2) bizType2.value = '';
+            
+            const bizUniqueId2 = document.getElementById('bizUniqueId2');
+            if (bizUniqueId2) bizUniqueId2.value = '';
+            
+            const callbackUrl2 = document.getElementById('callbackUrl2');
+            if (callbackUrl2) callbackUrl2.value = '';
+            
+            const singleTaskResultContent = document.getElementById('singleTaskResultContent');
+            if (singleTaskResultContent) {
+                singleTaskResultContent.innerHTML = '<p style="text-align: center; color: #999; padding: 40px 0;">提交任务后，结果将显示在这里</p>';
+            }
+        }
+
+        // 添加批量任务行
+        function addBatchRow() {
+            const batchList = document.getElementById('batchFileList');
+            const items = batchList.querySelectorAll('.file-list-item');
+
+            if (items.length >= 50) {
+                alert('最多只能添加50个任务');
+                return;
+            }
+
+            const index = items.length;
+            const newItem = document.createElement('div');
+            newItem.className = 'file-list-item';
+            newItem.setAttribute('data-index', index);
+
+            newItem.innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div>
+                        <label>文件URL *</label>
+                        <input type="url" class="batch-file-url" placeholder="https://example.com/audio.wav" required>
+                    </div>
+                    <div>
+                        <label>文件名（可选）</label>
+                        <input type="text" class="batch-file-name" placeholder="如: audio.wav">
+                    </div>
+                    <div>
+                        <label>回调URL（可选）</label>
+                        <input type="url" class="batch-callback-url" placeholder="https://example.com/callback">
+                    </div>
+                    <div>
+                        <label>应用ID（可选）</label>
+                        <input type="text" class="batch-app-id" placeholder="如: my_app">
+                    </div>
+                    <div>
+                        <label>业务类型（可选）</label>
+                        <input type="text" class="batch-biz-type" placeholder="如: speech_recognition">
+                    </div>
+                    <div>
+                        <label>业务唯一ID（可选）</label>
+                        <input type="text" class="batch-biz-unique-id" placeholder="如: batch_001">
+                    </div>
+                </div>
+                <div style="margin-top: 15px; text-align: right;">
+                    <button class="btn-danger" onclick="removeBatchRow(this)" style="padding: 8px 15px;">
+                        <i class="fas fa-trash"></i> 删除此行
+                    </button>
+                </div>
+            `;
+
+            batchList.appendChild(newItem);
+
+            // 滚动到新添加的行
+            newItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // 移除批量任务行
+        function removeBatchRow(button) {
+            const item = button.closest('.file-list-item');
+            const items = document.querySelectorAll('#batchFileList .file-list-item');
+
+            if (items.length > 1) {
+                item.remove();
+                // 重新索引
+                const remainingItems = document.querySelectorAll('#batchFileList .file-list-item');
+                remainingItems.forEach((item, index) => {
+                    item.setAttribute('data-index', index);
+                });
+            } else {
+                // 如果是最后一行，清空输入框
+                const inputs = item.querySelectorAll('input');
+                inputs.forEach(input => input.value = '');
+            }
+        }
+
+        // 清空批量表单
+        function clearBatchForm() {
+            if (confirm('确定要清空所有批量任务输入吗？')) {
+                const items = document.querySelectorAll('#batchFileList .file-list-item');
+                items.forEach((item, index) => {
+                    const inputs = item.querySelectorAll('input');
+                    inputs.forEach(input => input.value = '');
+
+                    // 只保留第一行，删除其他行
+                    if (index > 0) {
+                        item.remove();
+                    }
+                });
+                document.getElementById('batchSubmitResultContent').innerHTML = '<p style="text-align: center; color: #999; padding: 40px 0;">批量提交后，结果将显示在这里</p>';
+                document.getElementById('batchOperationResultContent').innerHTML = '<p style="text-align: center; color: #999; padding: 40px 0;">批量操作后，结果将显示在这里</p>';
+            }
+        }
+
+        // 从文本导入批量任务
+        function importFromText() {
+            const text = prompt('请输入任务列表，每行一个任务，格式：文件URL,文件名,回调URL,应用ID,业务类型,业务唯一ID\n\n例如：\nhttps://example.com/audio1.wav,audio1.wav,https://example.com/callback,my_app,speech_recognition,001\nhttps://example.com/audio2.wav,audio2.wav');
+
+            if (text) {
+                const lines = text.split('\n').filter(line => line.trim() !== '');
+                const batchList = document.getElementById('batchFileList');
+
+                // 清空现有列表（保留第一行）
+                const items = batchList.querySelectorAll('.file-list-item');
+                items.forEach((item, index) => {
+                    if (index > 0) {
+                        item.remove();
+                    }
+                });
+
+                // 清空第一行
+                const firstItem = batchList.querySelector('.file-list-item');
+                const firstInputs = firstItem.querySelectorAll('input');
+                firstInputs.forEach(input => input.value = '');
+
+                // 添加新行
+                lines.forEach((line, index) => {
+                    const parts = line.split(',').map(part => part.trim());
+                    const fileUrl = parts[0] || '';
+                    const fileName = parts[1] || '';
+                    const callbackUrl = parts[2] || '';
+                    const appId = parts[3] || '';
+                    const bizType = parts[4] || '';
+                    const bizUniqueId = parts[5] || '';
+
+                    if (fileUrl) {
+                        if (index === 0) {
+                            // 第一行使用现有的行
+                            firstInputs[0].value = fileUrl;
+                            firstInputs[1].value = fileName;
+                            firstInputs[2].value = callbackUrl;
+                            firstInputs[3].value = appId;
+                            firstInputs[4].value = bizType;
+                            firstInputs[5].value = bizUniqueId;
+                        } else {
+                            addBatchRow();
+                            const newItem = batchList.lastElementChild;
+                            const inputs = newItem.querySelectorAll('input');
+                            inputs[0].value = fileUrl;
+                            inputs[1].value = fileName;
+                            inputs[2].value = callbackUrl;
+                            inputs[3].value = appId;
+                            inputs[4].value = bizType;
+                            inputs[5].value = bizUniqueId;
+                        }
+                    }
+                });
+
+                alert(`成功导入 ${lines.length} 个任务`);
+            }
+        }
+
+        // 获取统计信息
+        async function getStats() {
+            try {
+                const response = await fetch('/list_tasks?page=1&page_size=1');
+                const result = await response.json();
+
+                if (result.code === 0) {
+                    document.getElementById('totalTasks').textContent = result.total || 0;
+
+                    // 模拟一些统计数字
+                    document.getElementById('completedTasks').textContent = Math.floor((result.total || 0) * 0.65);
+                    document.getElementById('processingTasks').textContent = Math.floor((result.total || 0) * 0.1);
+                    document.getElementById('pendingTasks').textContent = Math.floor((result.total || 0) * 0.2);
+                    document.getElementById('failedTasks').textContent = Math.floor((result.total || 0) * 0.05);
+                }
+            } catch (error) {
+                console.error('获取统计信息失败:', error);
+            }
+        }
+
+        // 刷新任务列表
+        async function refreshTaskList() {
+            const loadingDiv = document.getElementById('taskListLoading');
+            const contentDiv = document.getElementById('taskListContent');
+            const paginationDiv = document.getElementById('taskListPagination');
+
+            const status = document.getElementById('filterStatus').value;
+            const taskType = document.getElementById('filterTaskType').value;
+            const pageSize = parseInt(document.getElementById('filterPageSize').value);
+
+            loadingDiv.style.display = 'block';
+            contentDiv.innerHTML = '';
+            paginationDiv.innerHTML = '';
+
+            try {
+                let url = `/list_tasks?page=1&page_size=${pageSize}`;
+                if (status) {
+                    url += `&status=${status}`;
+                }
+
+                const response = await fetch(url);
+                const result = await response.json();
+
+                loadingDiv.style.display = 'none';
+
+                if (result.code === 0 && result.tasks && result.tasks.length > 0) {
+                    let html = '<table>';
+                    html += '<thead><tr>';
+                    html += '<th>任务ID</th>';
+                    html += '<th>类型</th>';
+                    html += '<th>文件名</th>';
+                    html += '<th>状态</th>';
+                    html += '<th>进度</th>';
+                    html += '<th>回调状态</th>';
+                    html += '<th>创建时间</th>';
+                    html += '<th>操作</th>';
+                    html += '</tr></thead><tbody>';
+
+                    result.tasks.forEach(task => {
+                        const statusClass = `status-${task.status}`;
+                        const statusText = task.status === 'pending' ? '待处理' : 
+                                         task.status === 'processing' ? '处理中' : 
+                                         task.status === 'completed' ? '已完成' : 
+                                         task.status === 'failed' ? '失败' : '已取消';
+
+                        const callbackStatusText = task.callback_status === 'pending' ? '待回调' : 
+                                                  task.callback_status === 'success' ? '回调成功' : 
+                                                  task.callback_status === 'failed' ? '回调失败' : '-';
+
+                        const callbackClass = task.callback_status ? `status-${task.callback_status}` : '';
+
+                        // 进度条
+                        const progress = task.progress || 0;
+                        const progressBar = `
+                            <div style="width: 100px; background: #f0f0f0; border-radius: 10px; height: 10px; overflow: hidden;">
+                                <div style="width: ${progress * 100}%; background: #4CAF50; height: 100%;"></div>
+                            </div>
+                            <small style="display: block; text-align: center; margin-top: 3px;">${Math.round(progress * 100)}%</small>
+                        `;
+
+                        html += `<tr>`;
+                        html += `<td><span class="task-id">${task.task_id}</span></td>`;
+                        html += `<td>${task.task_type === 'file_upload' ? '<i class="fas fa-upload"></i> 上传' : '<i class="fas fa-link"></i> URL'}</td>`;
+                        html += `<td>${task.file_name || '<span style="color: #999;">未命名</span>'}</td>`;
+                        html += `<td><span class="status-badge ${statusClass}">${statusText}</span></td>`;
+                        html += `<td>${progressBar}</td>`;
+                        html += `<td><span class="status-badge ${callbackClass}">${callbackStatusText}</span></td>`;
+                        html += `<td>${new Date(task.created_time * 1000).toLocaleString()}</td>`;
+                        html += `<td>
+                            <button onclick="copyTaskId('${task.task_id}')" style="padding: 6px 10px; margin: 2px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                            <button onclick="viewTaskDetails('${task.task_id}')" style="padding: 6px 10px; margin: 2px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </td>`;
+                        html += `</tr>`;
+                    });
+
+                    html += '</tbody></table>';
+                    contentDiv.innerHTML = html;
+
+                    // 添加分页按钮
+                    if (result.total > pageSize) {
+                        const totalPages = Math.ceil(result.total / pageSize);
+                        const maxPagesToShow = 5;
+                        let paginationHtml = '<div style="display: flex; justify-content: center; align-items: center; gap: 5px;">';
+
+                        // 上一页按钮
+                        paginationHtml += `<button onclick="loadTaskPage(1)" style="padding: 8px 12px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">
+                            <i class="fas fa-angle-double-left"></i>
+                        </button>`;
+
+                        let startPage = Math.max(1, 1 - Math.floor(maxPagesToShow / 2));
+                        let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+
+                        for (let i = startPage; i <= endPage; i++) {
+                            paginationHtml += `<button onclick="loadTaskPage(${i})" style="padding: 8px 12px; border: 1px solid #ddd; background: ${i === 1 ? '#4CAF50' : 'white'}; color: ${i === 1 ? 'white' : '#333'}; border-radius: 4px; cursor: pointer;">${i}</button>`;
+                        }
+
+                        // 下一页按钮
+                        paginationHtml += `<button onclick="loadTaskPage(${totalPages})" style="padding: 8px 12px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">
+                            <i class="fas fa-angle-double-right"></i>
+                        </button>`;
+
+                        paginationHtml += '</div>';
+                        paginationDiv.innerHTML = paginationHtml;
+                    }
+                } else {
+                    contentDiv.innerHTML = `
+                        <div style="text-align: center; padding: 60px 20px; color: #666;">
+                            <i class="fas fa-inbox" style="font-size: 48px; color: #ddd; margin-bottom: 20px;"></i>
+                            <p style="font-size: 18px; margin-bottom: 10px;">暂无任务数据</p>
+                            <p style="font-size: 14px; color: #999;">尝试提交一个新任务或调整筛选条件</p>
+                        </div>
+                    `;
+                }
+
+                // 更新统计信息
+                getStats();
+            } catch (error) {
+                loadingDiv.style.display = 'none';
+                contentDiv.innerHTML = `
+                    <div style="text-align: center; padding: 40px 20px; color: #f44336;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 20px;"></i>
+                        <p style="font-size: 18px; margin-bottom: 10px;">加载失败</p>
+                        <p style="font-size: 14px;">错误信息: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // 复制任务ID
+        function copyTaskId(taskId) {
+            navigator.clipboard.writeText(taskId).then(() => {
+                showNotification('任务ID已复制到剪贴板: ' + taskId, 'success');
+            });
+        }
+
+        // 复制所有任务ID
+        function copyAllTaskIds() {
+            const taskIds = [];
+            const taskIdElements = document.querySelectorAll('.task-id');
+            taskIdElements.forEach(el => taskIds.push(el.textContent));
+
+            if (taskIds.length === 0) {
+                showNotification('没有可复制的任务ID', 'warning');
+                return;
+            }
+
+            const taskIdsText = taskIds.join(', ');
+            navigator.clipboard.writeText(taskIdsText).then(() => {
+                showNotification(`已复制 ${taskIds.length} 个任务ID到剪贴板`, 'success');
+            });
+        }
+
+        // 查看任务详情
+        async function viewTaskDetails(taskId) {
+            // 切换到任务管理标签页
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                if (btn.getAttribute('data-tab') === 'taskManagementTab') {
+                    btn.click();
+                }
+            });
+
+            // 设置任务ID并查询
+            document.getElementById('taskId').value = taskId;
+            await getTaskStatus();
+        }
+
+        // 从剪贴板粘贴
+        async function pasteFromClipboard(inputId) {
+            try {
+                const text = await navigator.clipboard.readText();
+                document.getElementById(inputId).value = text;
+                showNotification('已从剪贴板粘贴内容', 'success');
+            } catch (error) {
+                showNotification('无法读取剪贴板内容', 'error');
+            }
+        }
+
+        // 显示通知
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 15px 25px;
+                border-radius: 8px;
+                color: white;
+                font-weight: 500;
+                z-index: 10000;
+                animation: slideIn 0.3s ease;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            `;
+
+            if (type === 'success') {
+                notification.style.background = 'linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%)';
+                notification.innerHTML = `<i class="fas fa-check-circle"></i> ${message}`;
+            } else if (type === 'error') {
+                notification.style.background = 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)';
+                notification.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${message}`;
+            } else if (type === 'warning') {
+                notification.style.background = 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)';
+                notification.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${message}`;
+            } else {
+                notification.style.background = 'linear-gradient(135deg, #2196F3 0%, #1976D2 100%)';
+                notification.innerHTML = `<i class="fas fa-info-circle"></i> ${message}`;
+            }
+
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 300);
+            }, 3000);
+        }
+
+        // 加载指定页的任务列表
+        async function loadTaskPage(page) {
+            // 这里可以扩展为真正的分页加载
+            // 暂时先重新刷新列表
+            refreshTaskList();
+            showNotification(`加载第 ${page} 页`, 'info');
+        }
+
+        // 导出任务列表
+        function exportTaskList() {
+            const tasks = [];
+            const rows = document.querySelectorAll('#taskListContent table tbody tr');
+
+            if (rows.length === 0) {
+                showNotification('没有任务数据可导出', 'warning');
+                return;
+            }
+
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 7) {
+                    tasks.push({
+                        taskId: cells[0].textContent,
+                        type: cells[1].textContent,
+                        fileName: cells[2].textContent,
+                        status: cells[3].textContent,
+                        callbackStatus: cells[5].textContent,
+                        createdTime: cells[6].textContent
+                    });
+                }
+            });
+
+            // 创建CSV内容
+            let csvContent = "任务ID,类型,文件名,状态,回调状态,创建时间\n";
+            tasks.forEach(task => {
+                csvContent += `"${task.taskId}","${task.type}","${task.fileName}","${task.status}","${task.callbackStatus}","${task.createdTime}"\n`;
+            });
+
+            // 创建下载链接
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `tasks_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showNotification(`已导出 ${tasks.length} 个任务到CSV文件`, 'success');
+        }
+
+        // 清空所有任务
+        function clearAllTasks() {
+            if (confirm('警告：此操作将删除所有任务记录，包括已完成和进行中的任务。确定要继续吗？')) {
+                showNotification('清空任务功能开发中...', 'warning');
+            }
+        }
+
+        // 更新当前时间
+        function updateCurrentTime() {
+            const now = new Date();
+            const timeStr = now.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+            document.getElementById('currentTime').textContent = timeStr;
+        }
+
+        // 页面加载时初始化
+        window.onload = function() {
+            // 获取统计信息
+            getStats();
+
+            // 加载任务列表
+            refreshTaskList();
+
+            // 初始化事件监听器
+            document.getElementById('filterStatus').addEventListener('change', refreshTaskList);
+            document.getElementById('filterTaskType').addEventListener('change', refreshTaskList);
+            document.getElementById('filterPageSize').addEventListener('change', refreshTaskList);
+            document.getElementById('filterDateRange').addEventListener('change', refreshTaskList);
+
+            // 初始化当前时间
+            updateCurrentTime();
+            setInterval(updateCurrentTime, 1000);
+
+            // 添加CSS动画
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes slideOut {
+                    from { transform: translateX(0); opacity: 1; }
+                    to { transform: translateX(100%); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+        };
+
+        // ============ API调用函数 ============
+
+        async function submitFileUpload() {
+            const fileInput = document.getElementById('fileUpload');
+            const callbackUrl = document.getElementById('callbackUrl');
+            const appId = document.getElementById('appId');
+            const bizType = document.getElementById('bizType');
+            const bizUniqueId = document.getElementById('bizUniqueId');
+
+            if (!fileInput.files.length) {
+                showNotification('请选择要上传的音频文件', 'error');
+                return;
+            }
+
+            const resultDiv = document.getElementById('singleTaskResultContent');
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 30px;"><div class="loading" style="margin: 0 auto 15px;"></div><div>正在提交任务...</div></div>';
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            if (callbackUrl.value) {
+                formData.append('callback_url', callbackUrl.value);
+            }
+            if (appId.value) {
+                formData.append('app_id', appId.value);
+            }
+            if (bizType.value) {
+                formData.append('biz_type', bizType.value);
+            }
+            if (bizUniqueId.value) {
+                formData.append('biz_unique_id', bizUniqueId.value);
+            }
+
+            try {
+                const response = await fetch('/submit_task', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                let html = '';
+                if (result.code === 0) {
+                    html = `
+                        <div class="success-message">
+                            <i class="fas fa-check-circle"></i>
+                            <div>
+                                <strong>任务提交成功！</strong>
+                                <p>任务ID: ${result.task_id}</p>
+                            </div>
+                        </div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                    document.getElementById('taskId').value = result.task_id;
+                    showNotification('任务提交成功', 'success');
+
+                    // 刷新统计和列表
+                    getStats();
+                    refreshTaskList();
+                } else {
+                    html = `
+                        <div class="error-message">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <div>
+                                <strong>任务提交失败！</strong>
+                                <p>${result.msg || '未知错误'}</p>
+                            </div>
+                        </div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                    showNotification('任务提交失败: ' + (result.msg || '未知错误'), 'error');
+                }
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <div>
+                            <strong>提交失败！</strong>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+                showNotification('提交失败: ' + error.message, 'error');
+            }
+        }
+
+        async function submitFileUrl() {
+            const fileUrl = document.getElementById('fileUrl').value;
+            const fileName = document.getElementById('fileName').value;
+            const callbackUrl = document.getElementById('callbackUrl2');
+            const appId = document.getElementById('appId2');
+            const bizType = document.getElementById('bizType2');
+            const bizUniqueId = document.getElementById('bizUniqueId2');
+
+            if (!fileUrl) {
+                showNotification('请输入文件URL', 'error');
+                return;
+            }
+
+            const resultDiv = document.getElementById('singleTaskResultContent');
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 30px;"><div class="loading" style="margin: 0 auto 15px;"></div><div>正在提交任务...</div></div>';
+
+            const formData = new FormData();
+            formData.append('file_url', fileUrl);
+            if (fileName) {
+                formData.append('file_name', fileName);
+            }
+            if (callbackUrl.value) {
+                formData.append('callback_url', callbackUrl.value);
+            }
+            if (appId.value) {
+                formData.append('app_id', appId.value);
+            }
+            if (bizType.value) {
+                formData.append('biz_type', bizType.value);
+            }
+            if (bizUniqueId.value) {
+                formData.append('biz_unique_id', bizUniqueId.value);
+            }
+
+            try {
+                const response = await fetch('/submit_task', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                let html = '';
+                if (result.code === 0) {
+                    html = `
+                        <div class="success-message">
+                            <i class="fas fa-check-circle"></i>
+                            <div>
+                                <strong>任务提交成功！</strong>
+                                <p>任务ID: ${result.task_id}</p>
+                            </div>
+                        </div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                    document.getElementById('taskId').value = result.task_id;
+                    showNotification('任务提交成功', 'success');
+
+                    // 刷新统计和列表
+                    getStats();
+                    refreshTaskList();
+                } else {
+                    html = `
+                        <div class="error-message">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <div>
+                                <strong>任务提交失败！</strong>
+                                <p>${result.msg || '未知错误'}</p>
+                            </div>
+                        </div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                    showNotification('任务提交失败: ' + (result.msg || '未知错误'), 'error');
+                }
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <div>
+                            <strong>提交失败！</strong>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+                showNotification('提交失败: ' + error.message, 'error');
+            }
+        }
+
+        async function getTaskStatus() {
+            const taskId = document.getElementById('taskId').value;
+            if (!taskId) {
+                showNotification('请输入任务ID', 'error');
+                return;
+            }
+
+            const resultDiv = document.getElementById('taskManagementResultContent');
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 30px;"><div class="loading" style="margin: 0 auto 15px;"></div><div>正在查询任务状态...</div></div>';
+
+            try {
+                const response = await fetch(`/get_task_status?task_id=${taskId}`);
+                const result = await response.json();
+
+                let html = '';
+                if (result.code === 0) {
+                    const statusText = result.status === 'pending' ? '待处理' : 
+                                    result.status === 'processing' ? '处理中' : 
+                                    result.status === 'completed' ? '已完成' : 
+                                    result.status === 'failed' ? '失败' : '已取消';
+
+                    const statusClass = `status-${result.status}`;
+                    const callbackStatusText = result.callback_status === 'pending' ? '待回调' : 
+                                              result.callback_status === 'success' ? '回调成功' : 
+                                              result.callback_status === 'failed' ? '回调失败' : '-';
+
+                    html = `
+                        <div class="success-message">
+                            <i class="fas fa-info-circle"></i>
+                            <div>
+                                <strong>任务状态查询成功</strong>
+                                <p>任务ID: ${result.task_id}</p>
+                            </div>
+                        </div>
+                        <div style="margin: 20px 0;">
+                            <table>
+                                <tr>
+                                    <td style="width: 120px; font-weight: 600;">任务状态:</td>
+                                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                                </tr>
+                                <tr>
+                                    <td style="font-weight: 600;">处理进度:</td>
+                                    <td>
+                                        <div style="width: 200px; background: #f0f0f0; border-radius: 10px; height: 10px; overflow: hidden;">
+                                            <div style="width: ${result.progress * 100}%; background: #4CAF50; height: 100%;"></div>
+                                        </div>
+                                        <small>${Math.round(result.progress * 100)}%</small>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="font-weight: 600;">回调状态:</td>
+                                    <td>${callbackStatusText}</td>
+                                </tr>
+                                <tr>
+                                    <td style="font-weight: 600;">更新时间:</td>
+                                    <td>${new Date(result.updated_time * 1000).toLocaleString()}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                    showNotification('任务状态查询成功', 'success');
+                } else {
+                    html = `
+                        <div class="error-message">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <div>
+                                <strong>查询失败！</strong>
+                                <p>${result.msg || '未知错误'}</p>
+                            </div>
+                        </div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                    showNotification('查询失败: ' + (result.msg || '未知错误'), 'error');
+                }
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <div>
+                            <strong>查询失败！</strong>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+                showNotification('查询失败: ' + error.message, 'error');
+            }
+        }
+
+        async function getTaskResult() {
+            const taskId = document.getElementById('taskId').value;
+            if (!taskId) {
+                showNotification('请输入任务ID', 'error');
+                return;
+            }
+
+            const resultDiv = document.getElementById('taskManagementResultContent');
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 30px;"><div class="loading" style="margin: 0 auto 15px;"></div><div>正在查询任务结果...</div></div>';
+
+            try {
+                const response = await fetch(`/get_task_result?task_id=${taskId}`);
+                const result = await response.json();
+
+                let html = '';
+                if (result.code === 0) {
+                    const statusText = result.status === 'pending' ? '待处理' : 
+                                    result.status === 'processing' ? '处理中' : 
+                                    result.status === 'completed' ? '已完成' : 
+                                    result.status === 'failed' ? '失败' : '已取消';
+
+                    const statusClass = `status-${result.status}`;
+
+                    html = `
+                        <div class="success-message">
+                            <i class="fas fa-check-circle"></i>
+                            <div>
+                                <strong>任务结果查询成功</strong>
+                                <p>任务ID: ${result.task_id} | 状态: <span class="status-badge ${statusClass}">${statusText}</span></p>
+                            </div>
+                        </div>
+                    `;
+
+                    if (result.status === 'completed' && result.result) {
+                        html += `
+                            <div style="margin: 20px 0; padding: 20px; background: #f9f9f9; border-radius: 8px; border: 1px solid #e0e0e0;">
+                                <h4 style="margin-top: 0; color: #4CAF50; display: flex; align-items: center; gap: 10px;">
+                                    <i class="fas fa-file-alt"></i> 识别结果
+                                </h4>
+                                <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #ddd;">
+                                    <p style="font-size: 16px; line-height: 1.6; margin: 0;">${result.result.text || '无识别文本'}</p>
+                                </div>
+                                ${result.result.sentences && result.result.sentences.length > 0 ? `
+                                    <h5 style="margin: 15px 0 10px; color: #666;">句子详情:</h5>
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>序号</th>
+                                                <th>文本</th>
+                                                <th>开始时间</th>
+                                                <th>结束时间</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${result.result.sentences.map((sentence, index) => `
+                                                <tr>
+                                                    <td>${index + 1}</td>
+                                                    <td>${sentence.text}</td>
+                                                    <td>${sentence.start}s</td>
+                                                    <td>${sentence.end}s</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                ` : ''}
+                            </div>
+                        `;
+                    }
+
+                    html += `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+                    showNotification('任务结果查询成功', 'success');
+                } else if (result.code === 1) {
+                    html = `
+                        <div class="warning-message" style="background: #fff3cd; border-color: #ffeaa7; color: #856404;">
+                            <i class="fas fa-clock"></i>
+                            <div>
+                                <strong>任务尚未完成</strong>
+                                <p>任务状态: ${result.status || '未知'}</p>
+                            </div>
+                        </div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                    showNotification('任务尚未完成', 'warning');
+                } else {
+                    html = `
+                        <div class="error-message">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <div>
+                                <strong>查询失败！</strong>
+                                <p>${result.msg || result.error_msg || '未知错误'}</p>
+                            </div>
+                        </div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                    showNotification('查询失败: ' + (result.msg || result.error_msg || '未知错误'), 'error');
+                }
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <div>
+                            <strong>查询失败！</strong>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+                showNotification('查询失败: ' + error.message, 'error');
+            }
+        }
+
+        async function cancelTask() {
+            const taskId = document.getElementById('taskId').value;
+            if (!taskId) {
+                showNotification('请输入任务ID', 'error');
+                return;
+            }
+
+            if (!confirm(`确定要取消任务 ${taskId} 吗？`)) {
+                return;
+            }
+
+            const resultDiv = document.getElementById('taskManagementResultContent');
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 30px;"><div class="loading" style="margin: 0 auto 15px;"></div><div>正在取消任务...</div></div>';
+
+            try {
+                const formData = new FormData();
+                formData.append('task_id', taskId);
+
+                const response = await fetch('/cancel_task', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                let html = '';
+                if (result.code === 0) {
+                    html = `
+                        <div class="success-message">
+                            <i class="fas fa-check-circle"></i>
+                            <div>
+                                <strong>任务取消成功！</strong>
+                                <p>任务ID: ${taskId}</p>
+                            </div>
+                        </div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                    showNotification('任务取消成功', 'success');
+
+                    // 刷新统计和列表
+                    getStats();
+                    refreshTaskList();
+                } else {
+                    html = `
+                        <div class="error-message">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <div>
+                                <strong>取消失败！</strong>
+                                <p>${result.msg || '未知错误'}</p>
+                            </div>
+                        </div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                    showNotification('取消失败: ' + (result.msg || '未知错误'), 'error');
+                }
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <div>
+                            <strong>取消失败！</strong>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+                showNotification('取消失败: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteTask() {
+            const taskId = document.getElementById('taskId').value;
+            if (!taskId) {
+                showNotification('请输入任务ID', 'error');
+                return;
+            }
+
+            if (!confirm(`确定要删除任务 ${taskId} 吗？此操作不可恢复！`)) {
+                return;
+            }
+
+            const resultDiv = document.getElementById('taskManagementResultContent');
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 30px;"><div class="loading" style="margin: 0 auto 15px;"></div><div>正在删除任务...</div></div>';
+
+            try {
+                const formData = new FormData();
+                formData.append('task_id', taskId);
+
+                const response = await fetch('/delete_task', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                let html = '';
+                if (result.code === 0) {
+                    html = `
+                        <div class="success-message">
+                            <i class="fas fa-check-circle"></i>
+                            <div>
+                                <strong>任务删除成功！</strong>
+                                <p>任务ID: ${taskId}</p>
+                            </div>
+                        </div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                    showNotification('任务删除成功', 'success');
+
+                    // 清空任务ID输入框
+                    document.getElementById('taskId').value = '';
+
+                    // 刷新统计和列表
+                    getStats();
+                    refreshTaskList();
+                } else {
+                    html = `
+                        <div class="error-message">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <div>
+                                <strong>删除失败！</strong>
+                                <p>${result.msg || '未知错误'}</p>
+                            </div>
+                        </div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                    showNotification('删除失败: ' + (result.msg || '未知错误'), 'error');
+                }
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <div>
+                            <strong>删除失败！</strong>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+                showNotification('删除失败: ' + error.message, 'error');
+            }
+        }
+
+        async function batchSubmitJson() {
+            const table = document.getElementById('batchFileList');
+            if (!table) {
+                showNotification('未找到批量文件列表元素', 'error');
+                return;
+            }
+            const rows = table.getElementsByTagName('tbody')[0]?.getElementsByTagName('tr') || 
+                         table.getElementsByClassName('file-list-item');
+            const fileList = [];
+
+            let hasError = false;
+            for (let i = 0; i < rows.length; i++) {
+                const fileUrl = rows[i].querySelector('.batch-file-url')?.value?.trim();
+                const fileName = rows[i].querySelector('.batch-file-name')?.value?.trim();
+                const callbackUrl = rows[i].querySelector('.batch-callback-url')?.value?.trim();
+                const appId = rows[i].querySelector('.batch-app-id')?.value?.trim();
+                const bizType = rows[i].querySelector('.batch-biz-type')?.value?.trim();
+                const bizUniqueId = rows[i].querySelector('.batch-biz-unique-id')?.value?.trim();
+
+                if (fileUrl) {
+                    if (!fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
+                        showNotification(`第${i+1}行: 文件URL必须以http://或https://开头`, 'error');
+                        hasError = true;
+                        continue;
+                    }
+
+                    const item = {
+                        file_url: fileUrl
+                    };
+
+                    if (fileName) {
+                        item.file_name = fileName;
+                    }
+                    if (callbackUrl) {
+                        item.callback_url = callbackUrl;
+                    }
+                    if (appId) {
+                        item.app_id = appId;
+                    }
+                    if (bizType) {
+                        item.biz_type = bizType;
+                    }
+                    if (bizUniqueId) {
+                        item.biz_unique_id = bizUniqueId;
+                    }
+
+                    fileList.push(item);
+                }
+            }
+
+            if (hasError) {
+                return;
+            }
+
+            if (fileList.length === 0) {
+                showNotification('请至少添加一个有效的文件URL', 'error');
+                return;
+            }
+
+            if (fileList.length > 50) {
+                showNotification('一次最多提交50个任务', 'error');
+                return;
+            }
+
+            const resultDiv = document.getElementById('batchSubmitResultContent');
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 30px;"><div class="loading" style="margin: 0 auto 15px;"></div><div>正在批量提交任务... (共' + fileList.length + '个)</div></div>';
+
+            try {
+                const formData = new FormData();
+                formData.append('operation', 'submit');
+                formData.append('file_list', JSON.stringify(fileList));
+
+                const response = await fetch('/batch_operation', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                let html = '';
+                if (result.code === 0) {
+                    const successCount = result.results?.filter(r => r.code === 0).length || 0;
+                    const failedCount = result.results?.filter(r => r.code !== 0).length || 0;
+
+                    html = `
+                        <div class="success-message">
+                            <i class="fas fa-check-circle"></i>
+                            <div>
+                                <strong>批量提交完成！</strong>
+                                <p>成功: ${successCount} 个，失败: ${failedCount} 个</p>
+                            </div>
+                        </div>
+                    `;
+
+                    if (result.results && result.results.length > 0) {
+                        html += '<div style="margin-top: 20px; max-height: 300px; overflow-y: auto;">';
+                        html += '<table><thead><tr><th>序号</th><th>状态</th><th>任务ID</th><th>消息</th></tr></thead><tbody>';
+
+                        result.results.forEach((itemResult, index) => {
+                            if (itemResult.code === 0) {
+                                html += `
+                                    <tr style="background-color: #f0f9f0;">
+                                        <td>${index + 1}</td>
+                                        <td><span class="status-badge status-completed">成功</span></td>
+                                        <td>${itemResult.task_id}</td>
+                                        <td>${itemResult.msg || '提交成功'}</td>
+                                    </tr>
+                                `;
+                            } else {
+                                html += `
+                                    <tr style="background-color: #fdf0f0;">
+                                        <td>${index + 1}</td>
+                                        <td><span class="status-badge status-failed">失败</span></td>
+                                        <td>-</td>
+                                        <td>${itemResult.msg || '提交失败'}</td>
+                                    </tr>
+                                `;
+                            }
+                        });
+
+                        html += '</tbody></table></div>';
+                    }
+
+                    html += `<pre style="margin-top: 20px;">${JSON.stringify(result, null, 2)}</pre>`;
+
+                    showNotification(`批量提交完成: ${successCount}成功, ${failedCount}失败`, 'success');
+
+                    // 刷新统计和列表
+                    getStats();
+                    refreshTaskList();
+                } else {
+                    html = `
+                        <div class="error-message">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <div>
+                                <strong>批量提交失败！</strong>
+                                <p>${result.msg || '未知错误'}</p>
+                            </div>
+                        </div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                    showNotification('批量提交失败: ' + (result.msg || '未知错误'), 'error');
+                }
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <div>
+                            <strong>批量提交失败！</strong>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+                showNotification('批量提交失败: ' + error.message, 'error');
+            }
+        }
+
+        async function batchGetStatus() {
+            const taskIds = document.getElementById('batchTaskIds').value;
+            if (!taskIds) {
+                showNotification('请输入任务ID列表', 'error');
+                return;
+            }
+
+            const resultDiv = document.getElementById('batchOperationResultContent');
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 30px;"><div class="loading" style="margin: 0 auto 15px;"></div><div>正在批量查询任务状态...</div></div>';
+
+            try {
+                const formData = new FormData();
+                formData.append('task_ids', taskIds);
+
+                const response = await fetch('/batch_get_task_status', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                displayBatchResult(result, '状态查询');
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <div>
+                            <strong>批量查询状态失败！</strong>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+                showNotification('批量查询状态失败: ' + error.message, 'error');
+            }
+        }
+
+        async function batchGetResult() {
+            const taskIds = document.getElementById('batchTaskIds').value;
+            if (!taskIds) {
+                showNotification('请输入任务ID列表', 'error');
+                return;
+            }
+
+            const resultDiv = document.getElementById('batchOperationResultContent');
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 30px;"><div class="loading" style="margin: 0 auto 15px;"></div><div>正在批量查询任务结果...</div></div>';
+
+            try {
+                const formData = new FormData();
+                formData.append('task_ids', taskIds);
+
+                const response = await fetch('/batch_get_task_result', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                displayBatchResult(result, '结果查询');
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <div>
+                            <strong>批量查询结果失败！</strong>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+                showNotification('批量查询结果失败: ' + error.message, 'error');
+            }
+        }
+
+        async function batchCancel() {
+            const taskIds = document.getElementById('batchTaskIds').value;
+            if (!taskIds) {
+                showNotification('请输入任务ID列表', 'error');
+                return;
+            }
+
+            if (!confirm(`确定要批量取消 ${taskIds.split(',').length} 个任务吗？`)) {
+                return;
+            }
+
+            const resultDiv = document.getElementById('batchOperationResultContent');
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 30px;"><div class="loading" style="margin: 0 auto 15px;"></div><div>正在批量取消任务...</div></div>';
+
+            try {
+                const formData = new FormData();
+                formData.append('operation', 'cancel');
+                formData.append('task_ids', taskIds);
+
+                const response = await fetch('/batch_operation', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                displayBatchResult(result, '批量取消');
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <div>
+                            <strong>批量取消失败！</strong>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+                showNotification('批量取消失败: ' + error.message, 'error');
+            }
+        }
+
+        async function batchDelete() {
+            const taskIds = document.getElementById('batchTaskIds').value;
+            if (!taskIds) {
+                showNotification('请输入任务ID列表', 'error');
+                return;
+            }
+
+            const taskCount = taskIds.split(',').length;
+            if (!confirm(`确定要批量删除 ${taskCount} 个任务吗？此操作不可恢复！`)) {
+                return;
+            }
+
+            const resultDiv = document.getElementById('batchOperationResultContent');
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 30px;"><div class="loading" style="margin: 0 auto 15px;"></div><div>正在批量删除任务...</div></div>';
+
+            try {
+                const formData = new FormData();
+                formData.append('operation', 'delete');
+                formData.append('task_ids', taskIds);
+
+                const response = await fetch('/batch_operation', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                displayBatchResult(result, '批量删除');
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <div>
+                            <strong>批量删除失败！</strong>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+                showNotification('批量删除失败: ' + error.message, 'error');
+            }
+        }
+
+        function displayBatchResult(result, operationName) {
+            const resultDiv = document.getElementById('batchOperationResultContent');
+
+            let html = '';
+            if (result.code === 0) {
+                const successCount = result.results?.filter(r => r.code === 0).length || 0;
+                const failedCount = result.results?.filter(r => r.code !== 0).length || 0;
+
+                html = `
+                    <div class="success-message">
+                        <i class="fas fa-check-circle"></i>
+                        <div>
+                            <strong>${operationName}完成！</strong>
+                            <p>成功: ${successCount} 个，失败: ${failedCount} 个</p>
+                        </div>
+                    </div>
+                `;
+
+                if (result.results && result.results.length > 0) {
+                    html += '<div style="margin-top: 20px; max-height: 400px; overflow-y: auto;">';
+                    html += '<table><thead><tr><th>任务ID</th><th>状态</th><th>消息</th></tr></thead><tbody>';
+
+                    result.results.forEach(itemResult => {
+                        if (itemResult.code === 0) {
+                            html += `
+                                <tr style="background-color: #f0f9f0;">
+                                    <td>${itemResult.task_id || '-'}</td>
+                                    <td><span class="status-badge status-completed">成功</span></td>
+                                    <td>${itemResult.msg || '操作成功'}</td>
+                                </tr>
+                            `;
+                        } else {
+                            html += `
+                                <tr style="background-color: #fdf0f0;">
+                                    <td>${itemResult.task_id || '-'}</td>
+                                    <td><span class="status-badge status-failed">失败</span></td>
+                                    <td>${itemResult.msg || '操作失败'}</td>
+                                </tr>
+                            `;
+                        }
+                    });
+
+                    html += '</tbody></table></div>';
+                }
+
+                html += `<pre style="margin-top: 20px;">${JSON.stringify(result, null, 2)}</pre>`;
+
+                showNotification(`${operationName}完成: ${successCount}成功, ${failedCount}失败`, 'success');
+
+                // 刷新统计和列表
+                getStats();
+                refreshTaskList();
+            } else {
+                html = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <div>
+                            <strong>${operationName}失败！</strong>
+                            <p>${result.msg || '未知错误'}</p>
+                        </div>
+                    </div>
+                    <pre>${JSON.stringify(result, null, 2)}</pre>
+                `;
+                showNotification(`${operationName}失败: ` + (result.msg || '未知错误'), 'error');
+            }
+            resultDiv.innerHTML = html;
+        }
+
+        // 保留旧函数的兼容性包装
+        async function getTaskByBizId() {
+            showNotification('此功能已迁移到高级查询区域', 'info');
+        }
+
+        async function listTasksByApp() {
+            showNotification('此功能已迁移到高级查询区域', 'info');
+        }
+
+        async function advancedSearch() {
+            const bizUniqueId = document.getElementById('advancedBizUniqueId').value;
+            const appId = document.getElementById('advancedAppId').value;
+            const bizType = document.getElementById('advancedBizType').value;
+
+            if (!bizUniqueId && !appId && !bizType) {
+                showNotification('请至少填写一个查询条件', 'error');
+                return;
+            }
+
+            const resultDiv = document.getElementById('taskManagementResultContent');
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 30px;"><div class="loading" style="margin: 0 auto 15px;"></div><div>正在查询任务...</div></div>';
+
+            try {
+                let url = '';
+                const params = new URLSearchParams();
+
+                // 根据填写的条件选择调用哪个API
+                if (bizUniqueId) {
+                    // 如果有业务唯一ID，使用get_task_by_biz_id接口
+                    if (bizUniqueId) {
+                        params.append('biz_unique_id', bizUniqueId);
+                    }
+                    if (appId) {
+                        params.append('app_id', appId);
+                    }
+                    url = `/get_task_by_biz_id?${params.toString()}`;
+                } else {
+                    // 如果没有业务唯一ID，使用list_tasks_by_app接口
+                    if (appId) {
+                        params.append('app_id', appId);
+                    }
+                    if (bizType) {
+                        params.append('biz_type', bizType);
+                    }
+                    params.append('page', '1');
+                    params.append('page_size', '10');
+                    url = `/list_tasks_by_app?${params.toString()}`;
+                }
+
+                const response = await fetch(url);
+                const result = await response.json();
+
+                let html = '';
+                if (result.code === 0 && result.task) {
+                    // 单个任务查询结果
+                    const task = result.task;
+                    const statusText = task.status === 'pending' ? '待处理' : 
+                                    task.status === 'processing' ? '处理中' : 
+                                    task.status === 'completed' ? '已完成' : 
+                                    task.status === 'failed' ? '失败' : '已取消';
+
+                    const statusClass = `status-${task.status}`;
+
+                    html = `
+                        <div class="success-message">
+                            <i class="fas fa-check-circle"></i>
+                            <div>
+                                <strong>任务查询成功</strong>
+                                <p>业务唯一ID: ${bizUniqueId || '-'}</p>
+                            </div>
+                        </div>
+                        <div style="margin: 20px 0;">
+                            <table>
+                                <tr>
+                                    <td style="width: 120px; font-weight: 600;">任务ID:</td>
+                                    <td><span class="task-id">${task.task_id}</span></td>
+                                </tr>
+                                <tr>
+                                    <td style="font-weight: 600;">任务状态:</td>
+                                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                                </tr>
+                                <tr>
+                                    <td style="font-weight: 600;">文件名称:</td>
+                                    <td>${task.file_name || '-'}</td>
+                                </tr>
+                                <tr>
+                                    <td style="font-weight: 600;">应用ID:</td>
+                                    <td>${task.app_id || '-'}</td>
+                                </tr>
+                                <tr>
+                                    <td style="font-weight: 600;">业务类型:</td>
+                                    <td>${task.biz_type || '-'}</td>
+                                </tr>
+                                <tr>
+                                    <td style="font-weight: 600;">创建时间:</td>
+                                    <td>${new Date(task.created_time * 1000).toLocaleString()}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    `;
+
+                    // 自动填充任务ID到管理输入框
+                    document.getElementById('taskId').value = task.task_id;
+
+                    showNotification('任务查询成功', 'success');
+                } else if (result.code === 0 && result.tasks && result.tasks.length > 0) {
+                    // 任务列表查询结果
+                    html = `
+                        <div class="success-message">
+                            <i class="fas fa-check-circle"></i>
+                            <div>
+                                <strong>查询成功</strong>
+                                <p>应用ID: ${appId || '-'} | 业务类型: ${bizType || '-'} | 共找到 ${result.total} 个任务</p>
+                            </div>
+                        </div>
+                        <div style="margin-top: 20px;">
+                            <table class="task-list">
+                                <thead>
+                                    <tr>
+                                        <th>任务ID</th>
+                                        <th>任务类型</th>
+                                        <th>文件名称</th>
+                                        <th>状态</th>
+                                        <th>创建时间</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+
+                    result.tasks.forEach(task => {
+                        const statusText = task.status === 'pending' ? '待处理' : 
+                                        task.status === 'processing' ? '处理中' : 
+                                        task.status === 'completed' ? '已完成' : 
+                                        task.status === 'failed' ? '失败' : '已取消';
+
+                        const statusClass = `status-${task.status}`;
+                        const createdTime = new Date(task.created_time * 1000).toLocaleString();
+
+                        html += `
+                            <tr>
+                                <td><span class="task-id">${task.task_id}</span></td>
+                                <td>${task.task_type}</td>
+                                <td>${task.file_name || '-'}</td>
+                                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                                <td>${createdTime}</td>
+                                <td>
+                                    <button class="btn-info" onclick="getTaskResult('${task.task_id}')">查看结果</button>
+                                    <button class="btn-warning" onclick="cancelTask('${task.task_id}')">取消任务</button>
+                                    <button class="btn-danger" onclick="deleteTask('${task.task_id}')">删除任务</button>
+                                </td>
+                            </tr>`;
+                    });
+
+                    html += `
+                                </tbody>
+                            </table>
+                        </div>`;
+
+                    // 分页信息
+                    const totalPages = Math.ceil(result.total / result.page_size);
+                    if (totalPages > 1) {
+                        html += `
+                            <div class="pagination">
+                                <button onclick="changePage(${Math.max(1, result.page - 1)})" ${result.page === 1 ? 'disabled' : ''}>&lt; 上一页</button>
+                                <span>第 ${result.page} / ${totalPages} 页</span>
+                                <button onclick="changePage(${Math.min(totalPages, result.page + 1)})" ${result.page === totalPages ? 'disabled' : ''}>下一页 &gt;</button>
+                            </div>`;
+                    }
+
+                    showNotification(`查询成功，共找到 ${result.total} 个任务`, 'success');
+                } else {
+                    html = `
+                        <div class="error-message">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <div>
+                                <strong>未找到任务！</strong>
+                                <p>${result.msg || '未找到对应的任务'}</p>
+                            </div>
+                        </div>
+                    `;
+                    showNotification('未找到对应的任务', 'warning');
+                }
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <div>
+                            <strong>查询失败！</strong>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+                showNotification('查询失败: ' + error.message, 'error');
+            }
+        }
+
+        async function advancedSearch() {
+            const bizUniqueId = document.getElementById('advancedBizUniqueId').value;
+            const appId = document.getElementById('advancedAppId').value;
+            const bizType = document.getElementById('advancedBizType').value;
+
+            if (!bizUniqueId && !appId && !bizType) {
+                showNotification('请至少填写一个查询条件', 'error');
+                return;
+            }
+
+            const resultDiv = document.getElementById('taskManagementResultContent');
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 30px;"><div class="loading" style="margin: 0 auto 15px;"></div><div>正在执行高级查询...</div></div>';
+
+            try {
+                let url;
+                const params = new URLSearchParams();
+                
+                // 根据是否提供bizUniqueId选择API
+                if (bizUniqueId) {
+                    if (appId) {
+                        params.append('app_id', appId);
+                    }
+                    params.append('biz_unique_id', bizUniqueId);
+                    url = `/get_task_by_biz_id?${params.toString()}`;
+                } else {
+                    if (!appId && !bizType) {
+                        showNotification('请至少填写应用ID或业务类型', 'error');
+                        return;
+                    }
+                    if (appId) {
+                        params.append('app_id', appId);
+                    }
+                    if (bizType) {
+                        params.append('biz_type', bizType);
+                    }
+                    params.append('page', '1');
+                    params.append('page_size', '10');
+                    url = `/list_tasks_by_app?${params.toString()}`;
+                }
+
+                const response = await fetch(url);
+                const result = await response.json();
+
+                let html = '';
+                if (result.code === 0) {
+                    if (result.task) {
+                        // 单个任务结果（来自get_task_by_biz_id）
+                        const task = result.task;
+                        const statusText = task.status === 'pending' ? '待处理' : 
+                                        task.status === 'processing' ? '处理中' : 
+                                        task.status === 'completed' ? '已完成' : 
+                                        task.status === 'failed' ? '失败' : '已取消';
+
+                        const statusClass = `status-${task.status}`;
+
+                        html = `
+                            <div class="success-message">
+                                <i class="fas fa-check-circle"></i>
+                                <div>
+                                    <strong>任务查询成功</strong>
+                                    ${bizUniqueId ? `<p>业务唯一ID: ${bizUniqueId}</p>` : ''}
+                                </div>
+                            </div>
+                            <div style="margin: 20px 0;">
+                                <table>
+                                    <tr>
+                                        <td style="width: 120px; font-weight: 600;">任务ID:</td>
+                                        <td><span class="task-id">${task.task_id}</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td style="font-weight: 600;">任务状态:</td>
+                                        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td style="font-weight: 600;">文件名称:</td>
+                                        <td>${task.file_name || '-'}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="font-weight: 600;">应用ID:</td>
+                                        <td>${task.app_id || '-'}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="font-weight: 600;">业务类型:</td>
+                                        <td>${task.biz_type || '-'}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="font-weight: 600;">创建时间:</td>
+                                        <td>${new Date(task.created_time * 1000).toLocaleString()}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        `;
+
+                        // 自动填充任务ID到管理输入框
+                        document.getElementById('taskId').value = task.task_id;
+                    } else if (result.tasks && result.tasks.length > 0) {
+                        // 任务列表结果（来自list_tasks_by_app）
+                        html = `
+                            <div class="success-message">
+                                <i class="fas fa-check-circle"></i>
+                                <div>
+                                    <strong>查询成功，找到 ${result.tasks.length} 个任务</strong>
+                                </div>
+                            </div>
+                            <div style="margin: 20px 0;">
+                                <table class="task-list-table">
+                                    <thead>
+                                        <tr>
+                                            <th>任务ID</th>
+                                            <th>文件名称</th>
+                                            <th>应用ID</th>
+                                            <th>业务类型</th>
+                                            <th>任务状态</th>
+                                            <th>创建时间</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                        `;
+
+                        result.tasks.forEach(task => {
+                            const statusText = task.status === 'pending' ? '待处理' : 
+                                            task.status === 'processing' ? '处理中' : 
+                                            task.status === 'completed' ? '已完成' : 
+                                            task.status === 'failed' ? '失败' : '已取消';
+
+                            const statusClass = `status-${task.status}`;
+
+                            html += `
+                                        <tr>
+                                            <td><span class="task-id">${task.task_id}</span></td>
+                                            <td>${task.file_name || '-'}</td>
+                                            <td>${task.app_id || '-'}</td>
+                                            <td>${task.biz_type || '-'}</td>
+                                            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                                            <td>${new Date(task.created_time * 1000).toLocaleString()}</td>
+                                        </tr>
+                            `;
+                        });
+
+                        html += `
+                                    </tbody>
+                                </table>
+                            </div>
+                        `;
+                    } else {
+                        html = `
+                            <div class="info-message">
+                                <i class="fas fa-info-circle"></i>
+                                <div>
+                                    <strong>未找到符合条件的任务</strong>
+                                </div>
+                            </div>
+                        `;
+                    }
+                } else {
+                    html = `
+                        <div class="error-message">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <div>
+                                <strong>查询失败！</strong>
+                                <p>${result.msg || '查询过程中发生错误'}</p>
+                            </div>
+                        </div>
+                    `;
+                    showNotification('查询失败: ' + (result.msg || '查询过程中发生错误'), 'error');
+                }
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <div>
+                            <strong>查询失败！</strong>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+                showNotification('查询失败: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>
