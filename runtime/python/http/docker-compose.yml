@@ -1,0 +1,36 @@
+version: "3.8"
+
+services:
+  funasr-http:
+    build: .
+    image: funasr-http:latest
+    container_name: funasr-http
+    ports:
+      - "8000:8000"
+    environment:
+      - ASR_MODEL=paraformer-zh
+      - VAD_MODEL=fsmn-vad
+      - PUNC_MODEL=ct-punc-c
+      - DEVICE=cpu
+      - NGPU=0
+      - NCPU=4
+    volumes:
+      - ./temp_dir:/app/temp_dir
+      - ./data:/app/data
+      - ./templates:/app/templates
+      - ./hotwords.txt:/app/hotwords.txt
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:stable
+    container_name: funasr-nginx
+    depends_on:
+      - funasr-http
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./asr_nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./ssl:/etc/nginx/ssl
+      - ./doc:/usr/share/nginx/html/doc:ro
+    restart: unless-stopped
