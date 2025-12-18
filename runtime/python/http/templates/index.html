@@ -1416,18 +1416,34 @@ task_001, task_002, task_003
         // 获取统计信息
         async function getStats() {
             try {
+                // 分别获取各种状态的任务数量
+                const statusPromises = [
+                    fetch('/list_tasks?page=1&page_size=1&status=completed'),
+                    fetch('/list_tasks?page=1&page_size=1&status=processing'),
+                    fetch('/list_tasks?page=1&page_size=1&status=pending'),
+                    fetch('/list_tasks?page=1&page_size=1&status=failed')
+                ];
+                
+                const responses = await Promise.all(statusPromises);
+                const jsonData = await Promise.all(responses.map(res => res.json()));
+                
+                const [completedData, processingData, pendingData, failedData] = jsonData;
+                
+                const completedCount = completedData.total || 0;
+                const processingCount = processingData.total || 0;
+                const pendingCount = pendingData.total || 0;
+                const failedCount = failedData.total || 0;
+                
+                // 获取总任务数
                 const response = await fetch('/list_tasks?page=1&page_size=1');
                 const result = await response.json();
+                const totalCount = result.total || 0;
 
-                if (result.code === 0) {
-                    document.getElementById('totalTasks').textContent = result.total || 0;
-
-                    // 模拟一些统计数字
-                    document.getElementById('completedTasks').textContent = Math.floor((result.total || 0) * 0.65);
-                    document.getElementById('processingTasks').textContent = Math.floor((result.total || 0) * 0.1);
-                    document.getElementById('pendingTasks').textContent = Math.floor((result.total || 0) * 0.2);
-                    document.getElementById('failedTasks').textContent = Math.floor((result.total || 0) * 0.05);
-                }
+                document.getElementById('totalTasks').textContent = totalCount;
+                document.getElementById('completedTasks').textContent = completedCount;
+                document.getElementById('processingTasks').textContent = processingCount;
+                document.getElementById('pendingTasks').textContent = pendingCount;
+                document.getElementById('failedTasks').textContent = failedCount;
             } catch (error) {
                 console.error('获取统计信息失败:', error);
             }

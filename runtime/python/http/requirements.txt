@@ -16,3 +16,4 @@ aiofiles
 uvicorn
 requests
 python-multipart
+aiosqlite

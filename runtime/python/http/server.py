@@ -7,6 +7,8 @@ import time
 import uuid
 from enum import Enum
 from typing import List, Optional, Dict, Any
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 
 import aiofiles
 import aiohttp
@@ -62,6 +64,8 @@ parser.add_argument("--certfile", type=str, default=None, required=False, help="
 parser.add_argument("--keyfile", type=str, default=None, required=False, help="keyfile for ssl")
 parser.add_argument("--temp_dir", type=str, default="temp_dir/", required=False, help="temp dir")
 parser.add_argument("--max_concurrent_tasks", type=int, default=10, help="Maximum number of concurrent tasks")
+parser.add_argument("--db_pool_size", type=int, default=10, help="Database connection pool size")
+parser.add_argument("--asr_thread_pool_size", type=int, default=4, help="ASR processing thread pool size")
 args = parser.parse_args()
 logger.info("-----------  Configuration Arguments -----------")
 for arg, value in vars(args).items():
@@ -115,36 +119,107 @@ class TaskStatus(Enum):
     CANCELED = "canceled"
 
 
-# 初始化SQLite数据库
-conn = sqlite3.connect(":memory:")
-cursor = conn.cursor()
+# 数据库连接池
+class DatabaseConnectionPool:
+    def __init__(self, db_path=":memory:", pool_size=10):
+        self.db_path = db_path
+        self.pool_size = pool_size
+        self.connections = []
+        self.lock = asyncio.Lock()
+        self._initialize_pool()
+    
+    def _initialize_pool(self):
+        for _ in range(self.pool_size):
+            conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            self.connections.append(conn)
+    
+    async def get_connection(self):
+        async with self.lock:
+            if self.connections:
+                return self.connections.pop()
+            else:
+                # 如果连接池为空，创建新连接（作为后备方案）
+                conn = sqlite3.connect(self.db_path, check_same_thread=False)
+                conn.row_factory = sqlite3.Row
+                return conn
+    
+    async def return_connection(self, conn):
+        async with self.lock:
+            if len(self.connections) < self.pool_size:
+                self.connections.append(conn)
+            else:
+                conn.close()
+    
+    async def execute(self, query, params=()):
+        conn = await self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            conn.commit()
+            return cursor
+        finally:
+            await self.return_connection(conn)
+    
+    async def executemany(self, query, params_list):
+        conn = await self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.executemany(query, params_list)
+            conn.commit()
+            return cursor
+        finally:
+            await self.return_connection(conn)
+    
+    async def fetchone(self, query, params=()):
+        conn = await self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            return cursor.fetchone()
+        finally:
+            await self.return_connection(conn)
+    
+    async def fetchall(self, query, params=()):
+        conn = await self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            return cursor.fetchall()
+        finally:
+            await self.return_connection(conn)
+
+
+# 初始化数据库连接池
+db_pool = DatabaseConnectionPool(":memory:", args.db_pool_size)
 
 # 创建任务表
-cursor.execute('''
-CREATE TABLE tasks (
-    task_id TEXT PRIMARY KEY,
-    task_type TEXT,
-    file_path TEXT,
-    file_url TEXT,
-    file_name TEXT,
-    status TEXT,
-    progress REAL,
-    result TEXT,
-    error_msg TEXT,
-    created_time INTEGER,
-    updated_time INTEGER,
-    callback_url TEXT,
-    callback_status TEXT,
-    app_id TEXT,
-    biz_type TEXT,
-    biz_unique_id TEXT UNIQUE
-)
-''')
-conn.commit()
+async def init_db():
+    await db_pool.execute('''
+    CREATE TABLE tasks (
+        task_id TEXT PRIMARY KEY,
+        task_type TEXT,
+        file_path TEXT,
+        file_url TEXT,
+        file_name TEXT,
+        status TEXT,
+        progress REAL,
+        result TEXT,
+        error_msg TEXT,
+        created_time INTEGER,
+        updated_time INTEGER,
+        callback_url TEXT,
+        callback_status TEXT,
+        app_id TEXT,
+        biz_type TEXT,
+        biz_unique_id TEXT UNIQUE
+    )
+    ''')
 
 # 任务队列和并发控制
 task_queue = asyncio.Queue()
 running_tasks = set()
+asr_thread_pool = ThreadPoolExecutor(max_workers=args.asr_thread_pool_size)
 
 # 日志配置，增加更多调试信息
 logging.basicConfig(
@@ -174,11 +249,10 @@ async def send_callback_notification(task_id: str, callback_url: str) -> bool:
     """发送回调通知"""
     try:
         # 获取任务详情
-        async with conn.execute(
+        task_result = await db_pool.fetchone(
             "SELECT task_id, status, result, error_msg, app_id, biz_type, biz_unique_id FROM tasks WHERE task_id = ?",
             (task_id,)
-        ) as local_cursor:
-            task_result = await local_cursor.fetchone()
+        )
 
         if not task_result:
             logger.error(f"无法找到任务{task_id}的信息，无法发送回调")
@@ -212,11 +286,10 @@ async def send_callback_notification(task_id: str, callback_url: str) -> bool:
             async with session.post(callback_url, json=callback_data, timeout=10) as response:
                 if response.status == 200:
                     # 更新回调状态为成功
-                    await conn.execute(
+                    await db_pool.execute(
                         "UPDATE tasks SET callback_status = ? WHERE task_id = ?",
                         ("success", task_id)
                     )
-                    await conn.commit()
                     logger.info(f"任务{task_id}的回调通知发送成功")
                     return True
                 else:
@@ -229,6 +302,14 @@ async def send_callback_notification(task_id: str, callback_url: str) -> bool:
 
 async def process_audio_file(audio_path: str) -> Dict[str, Any]:
     """处理音频文件并进行识别"""
+    loop = asyncio.get_event_loop()
+    # 使用线程池执行CPU密集型的ASR任务
+    func = partial(_process_audio_sync, audio_path)
+    result = await loop.run_in_executor(asr_thread_pool, func)
+    return result
+
+def _process_audio_sync(audio_path: str) -> Dict[str, Any]:
+    """在单独线程中执行的实际音频处理函数"""
     try:
         # 使用ffmpeg转换音频格式
         audio_bytes, _ = (
@@ -285,8 +366,7 @@ async def task_processor():
             logger.info(f"开始处理任务: {task_id}")
 
             # 检查任务是否已取消
-            cursor.execute("SELECT status FROM tasks WHERE task_id = ?", (task_id,))
-            status_result = cursor.fetchone()
+            status_result = await db_pool.fetchone("SELECT status FROM tasks WHERE task_id = ?", (task_id,))
             if status_result and status_result[0] == TaskStatus.CANCELED.value:
                 logger.info(f"任务{task_id}已取消，跳过处理")
                 task_queue.task_done()
@@ -307,29 +387,25 @@ async def task_processor():
             try:
                 # 更新任务状态为处理中
                 logger.debug(f"开始处理任务: {task_id}")
-                cursor.execute(
+                await db_pool.execute(
                     "UPDATE tasks SET status = ?, progress = 0.1, updated_time = ? WHERE task_id = ?",
                     (TaskStatus.PROCESSING.value, int(time.time()), task_id)
                 )
-                conn.commit()
                 logger.info(f"任务{task_id}状态已更新为处理中")
 
                 # 再次检查任务是否已取消
-                cursor.execute("SELECT status FROM tasks WHERE task_id = ?", (task_id,))
-                status_result = cursor.fetchone()
+                status_result = await db_pool.fetchone("SELECT status FROM tasks WHERE task_id = ?", (task_id,))
                 if status_result and status_result[0] == TaskStatus.CANCELED.value:
                     logger.info(f"任务{task_id}已取消，停止处理")
-                    cursor.execute(
+                    await db_pool.execute(
                         "UPDATE tasks SET progress = 0, updated_time = ? WHERE task_id = ?",
                         (int(time.time()), task_id)
                     )
-                    conn.commit()
                     continue
 
                 # 获取任务详细信息
-                cursor.execute("SELECT task_type, file_path, file_url, file_name FROM tasks WHERE task_id = ?",
+                db_task_info = await db_pool.fetchone("SELECT task_type, file_path, file_url, file_name FROM tasks WHERE task_id = ?",
                                (task_id,))
-                db_task_info = cursor.fetchone()
 
                 if not db_task_info:
                     logger.error(f"任务{task_id}信息不存在于数据库中")
@@ -343,9 +419,8 @@ async def task_processor():
                 # 根据任务类型处理
                 if task_type == "file_url" and file_url:
                     # 下载文件
-                    cursor.execute("UPDATE tasks SET progress = 0.2, updated_time = ? WHERE task_id = ?",
+                    await db_pool.execute("UPDATE tasks SET progress = 0.2, updated_time = ? WHERE task_id = ?",
                                    (int(time.time()), task_id))
-                    conn.commit()
 
                     file_ext = os.path.splitext(file_name)[1] if file_name else ".wav"
                     temp_file_path = f"{args.temp_dir}/{task_id}{file_ext}"
@@ -354,14 +429,12 @@ async def task_processor():
                         raise Exception("文件下载失败")
 
                     audio_path = temp_file_path
-                    cursor.execute("UPDATE tasks SET file_path = ?, progress = 0.4, updated_time = ? WHERE task_id = ?",
+                    await db_pool.execute("UPDATE tasks SET file_path = ?, progress = 0.4, updated_time = ? WHERE task_id = ?",
                                    (audio_path, int(time.time()), task_id))
-                    conn.commit()
 
                 # 处理音频文件
-                cursor.execute("UPDATE tasks SET progress = 0.6, updated_time = ? WHERE task_id = ?",
+                await db_pool.execute("UPDATE tasks SET progress = 0.6, updated_time = ? WHERE task_id = ?",
                                (int(time.time()), task_id))
-                conn.commit()
                 logger.info(f"任务{task_id}开始进行语音识别")
 
                 result = await process_audio_file(audio_path)
@@ -371,16 +444,14 @@ async def task_processor():
                 import json
                 result_json = json.dumps(result)
                 # 更新任务状态为已完成
-                cursor.execute(
+                await db_pool.execute(
                     "UPDATE tasks SET status = ?, progress = 1.0, result = ?, updated_time = ? WHERE task_id = ?",
                     (TaskStatus.COMPLETED.value, result_json, int(time.time()), task_id)
                 )
-                conn.commit()
                 logger.info(f"任务{task_id}处理完成")
 
                 # 检查是否有回调URL，如果有则发送回调通知
-                cursor.execute("SELECT callback_url FROM tasks WHERE task_id = ?", (task_id,))
-                callback_url_result = cursor.fetchone()
+                callback_url_result = await db_pool.fetchone("SELECT callback_url FROM tasks WHERE task_id = ?", (task_id,))
                 if callback_url_result and callback_url_result[0]:
                     callback_url = callback_url_result[0]
                     # 在后台发送回调，不阻塞任务处理
@@ -389,16 +460,14 @@ async def task_processor():
             except Exception as e:
                 # 更新任务状态为失败
                 logger.error(f"任务{task_id}处理失败: {e}")
-                cursor.execute(
+                await db_pool.execute(
                     "UPDATE tasks SET status = ?, progress = 0, error_msg = ?, updated_time = ? WHERE task_id = ?",
                     (TaskStatus.FAILED.value, str(e), int(time.time()), task_id)
                 )
-                conn.commit()
                 logger.info(f"任务{task_id}状态已更新为失败")
 
                 # 检查是否有回调URL，如果有则发送回调通知
-                cursor.execute("SELECT callback_url FROM tasks WHERE task_id = ?", (task_id,))
-                callback_url_result = cursor.fetchone()
+                callback_url_result = await db_pool.fetchone("SELECT callback_url FROM tasks WHERE task_id = ?", (task_id,))
                 if callback_url_result and callback_url_result[0]:
                     callback_url = callback_url_result[0]
                     # 在后台发送回调，不阻塞任务处理
@@ -422,14 +491,18 @@ async def task_processor():
 @app.on_event("startup")
 async def startup_event():
     global task_queue
+    # 初始化数据库
+    await init_db()
+    
     # 在FastAPI的事件循环中初始化任务队列
     task_queue = asyncio.Queue()
     logger.debug(f"任务队列已初始化: {task_queue}")
     logger.debug(f"当前事件循环: {asyncio.get_running_loop()}")
     logger.info(f"任务处理器已启动")
-    # 创建任务处理器
-    processor_task = asyncio.create_task(task_processor())
-    logger.debug(f"任务处理器已创建: {processor_task}")
+    # 创建多个任务处理器以支持并发处理
+    for i in range(min(args.asr_thread_pool_size, args.max_concurrent_tasks)):
+        processor_task = asyncio.create_task(task_processor())
+        logger.debug(f"任务处理器 {i+1} 已创建: {processor_task}")
 
 
 @app.post("/mock_callback")
@@ -480,12 +553,11 @@ async def submit_task(
         file_name = file.filename or f"upload_{task_id}.{suffix}"
 
     # 插入任务记录
-    cursor.execute(
+    await db_pool.execute(
         "INSERT INTO tasks (task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time, callback_url, callback_status, app_id, biz_type, biz_unique_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (task_id, task_type, file_path, file_url, file_name, TaskStatus.PENDING.value, 0, "", "", current_time,
          current_time, callback_url, "pending", app_id, biz_type, biz_unique_id)
     )
-    conn.commit()
 
     # 将任务加入队列
     global task_queue
@@ -509,8 +581,7 @@ async def submit_task(
 @app.get("/get_task_status")
 async def get_task_status(task_id: str = Query(..., description="任务ID")):
     """查询任务状态"""
-    cursor.execute("SELECT status, progress, updated_time, callback_status FROM tasks WHERE task_id = ?", (task_id,))
-    result = cursor.fetchone()
+    result = await db_pool.fetchone("SELECT status, progress, updated_time, callback_status FROM tasks WHERE task_id = ?", (task_id,))
 
     if not result:
         raise HTTPException(status_code=404, detail="任务不存在")
@@ -530,8 +601,7 @@ async def get_task_status(task_id: str = Query(..., description="任务ID")):
 @app.get("/get_task_result")
 async def get_task_result(task_id: str = Query(..., description="任务ID")):
     """查询任务结果"""
-    cursor.execute("SELECT status, result, error_msg, callback_status FROM tasks WHERE task_id = ?", (task_id,))
-    result = cursor.fetchone()
+    result = await db_pool.fetchone("SELECT status, result, error_msg, callback_status FROM tasks WHERE task_id = ?", (task_id,))
 
     if not result:
         raise HTTPException(status_code=404, detail="任务不存在")
@@ -579,8 +649,7 @@ async def get_task_result(task_id: str = Query(..., description="任务ID")):
 @app.post("/cancel_task")
 async def cancel_task(task_id: str = Form(..., description="任务ID")):
     """取消任务"""
-    cursor.execute("SELECT status FROM tasks WHERE task_id = ?", (task_id,))
-    result = cursor.fetchone()
+    result = await db_pool.fetchone("SELECT status FROM tasks WHERE task_id = ?", (task_id,))
 
     if not result:
         raise HTTPException(status_code=404, detail="任务不存在")
@@ -594,11 +663,10 @@ async def cancel_task(task_id: str = Form(..., description="任务ID")):
         }
 
     # 更新任务状态为已取消
-    cursor.execute(
+    await db_pool.execute(
         "UPDATE tasks SET status = ?, updated_time = ? WHERE task_id = ?",
         (TaskStatus.CANCELED.value, int(time.time()), task_id)
     )
-    conn.commit()
 
     return {
         "code": 0,
@@ -609,8 +677,7 @@ async def cancel_task(task_id: str = Form(..., description="任务ID")):
 @app.post("/delete_task")
 async def delete_task(task_id: str = Form(..., description="任务ID")):
     """删除任务"""
-    cursor.execute("SELECT file_path FROM tasks WHERE task_id = ?", (task_id,))
-    result = cursor.fetchone()
+    result = await db_pool.fetchone("SELECT file_path FROM tasks WHERE task_id = ?", (task_id,))
 
     if not result:
         raise HTTPException(status_code=404, detail="任务不存在")
@@ -624,8 +691,7 @@ async def delete_task(task_id: str = Form(..., description="任务ID")):
             logger.error(f"删除文件失败: {e}")
 
     # 删除任务记录
-    cursor.execute("DELETE FROM tasks WHERE task_id = ?", (task_id,))
-    conn.commit()
+    await db_pool.execute("DELETE FROM tasks WHERE task_id = ?", (task_id,))
 
     return {
         "code": 0,
@@ -643,16 +709,12 @@ async def list_tasks(page: int = Query(1, ge=1, description="页码"),
         where_clause = "" if status is None else "WHERE status = ?"
         params = () if status is None else (status,)
 
-        local_cursor = conn.cursor()
-        local_cursor.execute(
+        tasks = await db_pool.fetchall(
             f"SELECT task_id, task_type, file_name, status, created_time, updated_time, callback_status FROM tasks {where_clause} ORDER BY created_time DESC LIMIT ? OFFSET ?",
             (*params, page_size, offset)
         )
-        tasks = local_cursor.fetchall()
 
-        local_cursor.execute(f"SELECT COUNT(*) FROM tasks {where_clause}", params)
-        total_row = local_cursor.fetchone()
-        local_cursor.close()
+        total_row = await db_pool.fetchone(f"SELECT COUNT(*) FROM tasks {where_clause}", params)
 
         total = total_row[0] if total_row is not None else 0
 
@@ -679,13 +741,10 @@ async def list_tasks(page: int = Query(1, ge=1, description="页码"),
 async def get_task_details(task_id: str = Query(..., description="任务ID")):
     """查询任务详情"""
     try:
-        local_cursor = conn.cursor()
-        local_cursor.execute(
+        task = await db_pool.fetchone(
             "SELECT task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time, callback_status FROM tasks WHERE task_id = ?",
             (task_id,)
         )
-        task = local_cursor.fetchone()
-        local_cursor.close()
 
         if not task:
             raise HTTPException(status_code=404, detail="任务不存在")
@@ -724,14 +783,10 @@ async def batch_get_task_status(task_ids: str = Form(..., description="任务ID�
 
     # 批量查询任务状态
     placeholders = ",".join(["?"] * len(task_list))
-    # 使用独立的游标避免并发问题
-    local_cursor = conn.cursor()
-    local_cursor.execute(
+    results = await db_pool.fetchall(
         f"SELECT task_id, status, progress, updated_time, callback_status FROM tasks WHERE task_id IN ({placeholders})",
         task_list
     )
-    results = local_cursor.fetchall()
-    local_cursor.close()
 
     # 构建结果字典
     task_status_map = {}
@@ -775,14 +830,10 @@ async def batch_get_task_result(task_ids: str = Form(..., description="任务ID�
 
     # 批量查询任务结果
     placeholders = ",".join(["?"] * len(task_list))
-    # 使用独立的游标避免并发问题
-    local_cursor = conn.cursor()
-    local_cursor.execute(
+    results = await db_pool.fetchall(
         f"SELECT task_id, status, result, error_msg, callback_status FROM tasks WHERE task_id IN ({placeholders})",
         task_list
     )
-    results = local_cursor.fetchall()
-    local_cursor.close()
 
     # 构建结果字典
     task_result_map = {}
@@ -862,14 +913,10 @@ async def batch_get_task_details(task_ids: str = Form(..., description="任务ID
 
     # 批量查询任务详情
     placeholders = ",".join(["?"] * len(task_list))
-    # 使用独立的游标避免并发问题
-    local_cursor = conn.cursor()
-    local_cursor.execute(
+    results = await db_pool.fetchall(
         f"SELECT task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time FROM tasks WHERE task_id IN ({placeholders})",
         task_list
     )
-    results = local_cursor.fetchall()
-    local_cursor.close()
 
     # 构建结果字典
     task_details_map = {}
@@ -979,14 +1026,13 @@ async def batch_operation(
                 current_time = int(time.time())
 
                 # 插入任务记录
-                cursor.execute(
+                await db_pool.execute(
                     "INSERT INTO tasks (task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time, callback_url, callback_status, app_id, biz_type, biz_unique_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                     task_id, "file_url", "", file_url, file_name or f"batch_{task_id}.wav", TaskStatus.PENDING.value, 0,
                     "", "", current_time, current_time, item_callback_url, "pending", item_app_id, item_biz_type,
                     item_biz_unique_id)
                 )
-                conn.commit()
 
                 # 将任务加入队列
                 logger.debug(f"当前task_queue: {task_queue}")
@@ -1025,8 +1071,7 @@ async def batch_operation(
             try:
                 if operation == "cancel":
                     # 取消任务
-                    cursor.execute("SELECT status FROM tasks WHERE task_id = ?", (task_id,))
-                    result = cursor.fetchone()
+                    result = await db_pool.fetchone("SELECT status FROM tasks WHERE task_id = ?", (task_id,))
 
                     if not result:
                         results.append({
@@ -1047,11 +1092,10 @@ async def batch_operation(
                         continue
 
                     # 更新任务状态为已取消
-                    cursor.execute(
+                    await db_pool.execute(
                         "UPDATE tasks SET status = ?, updated_time = ? WHERE task_id = ?",
                         (TaskStatus.CANCELED.value, int(time.time()), task_id)
                     )
-                    conn.commit()
 
                     results.append({
                         "code": 0,
@@ -1061,8 +1105,7 @@ async def batch_operation(
 
                 else:  # delete
                     # 删除任务
-                    cursor.execute("SELECT file_path FROM tasks WHERE task_id = ?", (task_id,))
-                    result = cursor.fetchone()
+                    result = await db_pool.fetchone("SELECT file_path FROM tasks WHERE task_id = ?", (task_id,))
 
                     if not result:
                         results.append({
@@ -1081,8 +1124,7 @@ async def batch_operation(
                             logger.error(f"删除文件失败: {e}")
 
                     # 删除任务记录
-                    cursor.execute("DELETE FROM tasks WHERE task_id = ?", (task_id,))
-                    conn.commit()
+                    await db_pool.execute("DELETE FROM tasks WHERE task_id = ?", (task_id,))
 
                     results.append({
                         "code": 0,
@@ -1162,27 +1204,22 @@ async def get_task_by_biz_id(
         if not biz_unique_id and not app_id:
             raise HTTPException(status_code=400, detail="请至少提供一个查询条件")
             
-        local_cursor = conn.cursor()
-
         # 构建查询条件
         if biz_unique_id and app_id:
-            local_cursor.execute(
+            task = await db_pool.fetchone(
                 "SELECT task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time, callback_status, app_id, biz_type, biz_unique_id FROM tasks WHERE biz_unique_id = ? AND app_id = ?",
                 (biz_unique_id, app_id)
             )
         elif biz_unique_id:
-            local_cursor.execute(
+            task = await db_pool.fetchone(
                 "SELECT task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time, callback_status, app_id, biz_type, biz_unique_id FROM tasks WHERE biz_unique_id = ?",
                 (biz_unique_id,)
             )
         else:  # 只有app_id
-            local_cursor.execute(
+            task = await db_pool.fetchone(
                 "SELECT task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time, callback_status, app_id, biz_type, biz_unique_id FROM tasks WHERE app_id = ?",
                 (app_id,)
             )
-
-        task = local_cursor.fetchone()
-        local_cursor.close()
 
         if not task:
             raise HTTPException(status_code=404, detail="任务不存在")
@@ -1242,16 +1279,12 @@ async def list_tasks_by_app(
             where_clause = "WHERE biz_type = ?"
             params = (biz_type,)
 
-        local_cursor = conn.cursor()
-        local_cursor.execute(
+        tasks = await db_pool.fetchall(
             f"SELECT task_id, task_type, file_name, status, created_time, updated_time, callback_status, biz_type, biz_unique_id FROM tasks {where_clause} ORDER BY created_time DESC LIMIT ? OFFSET ?",
             (*params, page_size, offset)
         )
-        tasks = local_cursor.fetchall()
 
-        local_cursor.execute(f"SELECT COUNT(*) FROM tasks {where_clause}", params)
-        total_row = local_cursor.fetchone()
-        local_cursor.close()
+        total_row = await db_pool.fetchone(f"SELECT COUNT(*) FROM tasks {where_clause}", params)
 
         total = total_row[0] if total_row is not None else 0
 
