@@ -1,4 +1,5 @@
 torch
+torchaudio
 fastapi>=0.95.1
 uvicorn
 modelscope>=1.11.1

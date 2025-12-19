@@ -43,7 +43,7 @@ sudo chown -R $USER:$USER /opt/funasr-offline
 cd /opt/funasr-offline
 
 # 构建Docker镜像
-docker build -t funasr-http:latest .
+docker build -t funasr-offline:1.0.0 .
 
 
 部署：
@@ -58,6 +58,17 @@ docker-compose ps
 
 # 查看日志
 docker-compose logs -f
+
+
+访问：
+Nginx访问：
+http://192.168.56.21:7080/
+
+直接访问：
+http://192.168.56.21:8000/
+
+接口文档：
+http://192.168.56.21:7080/doc/
 
 
 

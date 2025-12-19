@@ -1,10 +1,11 @@
+# docker-compose.yml
 version: "3.8"
 
 services:
-  funasr-http:
+  funasr-offline:
     build: .
-    image: funasr-http:latest
-    container_name: funasr-http
+    image: funasr-offline:1.0.0
+    container_name: funasr-offline
     ports:
       - "8000:8000"
     environment:
@@ -19,18 +20,30 @@ services:
       - ./data:/app/data
       - ./templates:/app/templates
       - ./hotwords.txt:/app/hotwords.txt
+      # 添加 server.py 挂载以便于修改
+      - ./server.py:/app/server.py
+      # 添加模型目录挂载
+      - /opt/funasr-offline/models:/root/.cache/modelscope/hub/models
+    networks:
+      - funasr-network
     restart: unless-stopped
 
   nginx:
     image: nginx:stable
     container_name: funasr-nginx
     depends_on:
-      - funasr-http
+      - funasr-offline
     ports:
-      - "80:80"
-      - "443:443"
+      - "7080:80"
+      - "6443:443"
     volumes:
       - ./asr_nginx.conf:/etc/nginx/nginx.conf:ro
       - ./ssl:/etc/nginx/ssl
       - ./doc:/usr/share/nginx/html/doc:ro
+    networks:
+      - funasr-network
     restart: unless-stopped
+
+networks:
+  funasr-network:
+    driver: bridge

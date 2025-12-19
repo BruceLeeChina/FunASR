@@ -25,6 +25,19 @@ from funasr import AutoModel
 logger = get_logger(log_level=logging.INFO)
 logger.setLevel(logging.INFO)
 
+import os
+
+# 在现有代码的基础上添加环境变量读取逻辑
+asr_model = os.environ.get("ASR_MODEL", "paraformer-zh")
+vad_model = os.environ.get("VAD_MODEL", "fsmn-vad")
+punc_model = os.environ.get("PUNC_MODEL", "ct-punc-c")
+device = os.environ.get("DEVICE", "cuda")
+ngpu = int(os.environ.get("NGPU", "1"))
+ncpu = int(os.environ.get("NCPU", "4"))
+asr_model_revision = os.environ.get("ASR_MODEL_REVISION", "v2.0.4")
+vad_model_revision = os.environ.get("VAD_MODEL_REVISION", "v2.0.4")
+punc_model_revision = os.environ.get("PUNC_MODEL_REVISION", "v2.0.4")
+
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--host", type=str, default="0.0.0.0", required=False, help="host ip, localhost, 0.0.0.0"
@@ -33,27 +46,28 @@ parser.add_argument("--port", type=int, default=8000, required=False, help="serv
 parser.add_argument(
     "--asr_model",
     type=str,
-    default="paraformer-zh",
+    default=asr_model,  # 使用环境变量的值
     help="asr model from https://github.com/alibaba-damo-academy/FunASR?tab=readme-ov-file#model-zoo",
 )
-parser.add_argument("--asr_model_revision", type=str, default="v2.0.4", help="")
+parser.add_argument("--asr_model_revision", type=str, default=asr_model_revision, help="")
 parser.add_argument(
     "--vad_model",
     type=str,
-    default="fsmn-vad",
+    default=vad_model,  # 使用环境变量的值
     help="vad model from https://github.com/alibaba-damo-academy/FunASR?tab=readme-ov-file#model-zoo",
 )
-parser.add_argument("--vad_model_revision", type=str, default="v2.0.4", help="")
+parser.add_argument("--vad_model_revision", type=str, default=vad_model_revision, help="")
 parser.add_argument(
     "--punc_model",
     type=str,
-    default="ct-punc-c",
+    default=punc_model,  # 使用环境变量的值
     help="model from https://github.com/alibaba-damo-academy/FunASR?tab=readme-ov-file#model-zoo",
 )
-parser.add_argument("--punc_model_revision", type=str, default="v2.0.4", help="")
-parser.add_argument("--ngpu", type=int, default=1, help="0 for cpu, 1 for gpu")
-parser.add_argument("--device", type=str, default="cuda", help="cuda, cpu")
-parser.add_argument("--ncpu", type=int, default=4, help="cpu cores")
+parser.add_argument("--punc_model_revision", type=str, default=punc_model_revision, help="")
+parser.add_argument("--ngpu", type=int, default=ngpu, help="0 for cpu, 1 for gpu")  # 使用环境变量的值
+parser.add_argument("--device", type=str, default=device, help="cuda, cpu")  # 使用环境变量的值
+parser.add_argument("--ncpu", type=int, default=ncpu, help="cpu cores")  # 使用环境变量的值
+
 parser.add_argument(
     "--hotword_path",
     type=str,
