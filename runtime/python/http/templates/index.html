@@ -631,6 +631,22 @@
                         <i class="fas fa-link"></i> URL提交
                     </button>
                 </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-cog"></i> 识别模式</label>
+                    <div class="input-grid">
+                        <div>
+                            <label>
+                                <input type="radio" name="recognitionMode" value="default" checked> 默认识别（普通语音转文字）
+                            </label>
+                        </div>
+                        <div>
+                            <label>
+                                <input type="radio" name="recognitionMode" value="meeting"> 会议识别（人声检测与说话人分离）
+                            </label>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- 文件上传方式 -->
                 <div id="fileUploadMethod" class="upload-method">
@@ -714,6 +730,22 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <div class="form-group">
+                        <label><i class="fas fa-cog"></i> 识别模式</label>
+                        <div class="input-grid">
+                            <div>
+                                <label>
+                                    <input type="radio" name="recognitionModeUrl" value="default" checked> 默认识别（普通语音转文字）
+                                </label>
+                            </div>
+                            <div>
+                                <label>
+                                    <input type="radio" name="recognitionModeUrl" value="meeting"> 会议识别（人声检测与说话人分离）
+                                </label>
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="button-group">
                         <button class="btn-primary" id="submitFileUrlBtn">
@@ -789,6 +821,14 @@
                                 <label for="advancedBizType"><i class="fas fa-tags"></i> 业务类型</label>
                                 <input type="text" id="advancedBizType" placeholder="输入业务类型">
                             </div>
+                            <div>
+                                <label for="advancedRecognitionMode"><i class="fas fa-cog"></i> 识别模式</label>
+                                <select id="advancedRecognitionMode">
+                                    <option value="">全部模式</option>
+                                    <option value="default">默认识别</option>
+                                    <option value="meeting">会议识别</option>
+                                </select>
+                            </div>
                         </div>
 
                         <div class="button-group" style="margin-top: 20px;">
@@ -819,6 +859,23 @@
                     <h3 style="color: #4CAF50; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
                         <i class="fas fa-file-import"></i> 批量提交任务
                     </h3>
+                    
+                    <div class="form-group">
+                        <label><i class="fas fa-cog"></i> 识别模式</label>
+                        <div class="input-grid">
+                            <div>
+                                <label>
+                                    <input type="radio" name="batchRecognitionMode" value="default" checked> 默认识别（普通语音转文字）
+                                </label>
+                            </div>
+                            <div>
+                                <label>
+                                    <input type="radio" name="batchRecognitionMode" value="meeting"> 会议识别（人声检测与说话人分离）
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <label>添加任务文件列表（最多50个）</label>
 
                     <div class="file-list-container">
@@ -949,6 +1006,14 @@ task_001, task_002, task_003
                             </select>
                         </div>
                         <div>
+                            <label for="filterRecognitionMode">识别模式</label>
+                            <select id="filterRecognitionMode">
+                                <option value="">全部模式</option>
+                                <option value="default">默认识别</option>
+                                <option value="meeting">会议识别</option>
+                            </select>
+                        </div>
+                        <div>
                             <label for="filterPageSize">每页显示</label>
                             <select id="filterPageSize">
                                 <option value="10">10条</option>
@@ -1025,32 +1090,39 @@ task_001, task_002, task_003
 
     <script>
         // 标签页切换功能
-        document.querySelectorAll('.tab-button').forEach(button => {
-            button.addEventListener('click', () => {
-                // 移除所有标签页的active类
-                document.querySelectorAll('.tab-button').forEach(btn => {
-                    btn.classList.remove('active');
+        function setupTabSwitching() {
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', function() {
+                    // 移除所有标签页的active类
+                    document.querySelectorAll('.tab-button').forEach(btn => {
+                        btn.classList.remove('active');
+                    });
+
+                    // 隐藏所有标签页内容
+                    document.querySelectorAll('.tab-content').forEach(content => {
+                        content.classList.remove('active');
+                    });
+
+                    // 激活当前标签页
+                    this.classList.add('active');
+                    const tabId = this.getAttribute('data-tab');
+                    const tabContent = document.getElementById(tabId);
+                    if (tabContent) {
+                        tabContent.classList.add('active');
+                    }
+
+                    // 如果是任务列表标签页，刷新列表
+                    if (tabId === 'taskListTab') {
+                        refreshTaskList();
+                    }
                 });
-
-                // 隐藏所有标签页内容
-                document.querySelectorAll('.tab-content').forEach(content => {
-                    content.classList.remove('active');
-                });
-
-                // 激活当前标签页
-                button.classList.add('active');
-                const tabId = button.getAttribute('data-tab');
-                document.getElementById(tabId).classList.add('active');
-
-                // 如果是任务列表标签页，刷新列表
-                if (tabId === 'taskListTab') {
-                    refreshTaskList();
-                }
             });
-        });
+        }
 
         // 页面加载时初始化事件监听器
         document.addEventListener('DOMContentLoaded', function() {
+            // 初始化标签页切换功能
+            setupTabSwitching();
             // 为文件上传和URL上传按钮添加事件监听器
             const fileUploadBtn = document.getElementById('fileUploadBtn');
             if (fileUploadBtn) {
@@ -1457,6 +1529,7 @@ task_001, task_002, task_003
 
             const status = document.getElementById('filterStatus').value;
             const taskType = document.getElementById('filterTaskType').value;
+            const recognitionMode = document.getElementById('filterRecognitionMode').value;
             const pageSize = parseInt(document.getElementById('filterPageSize').value);
 
             loadingDiv.style.display = 'block';
@@ -1467,6 +1540,12 @@ task_001, task_002, task_003
                 let url = `/list_tasks?page=1&page_size=${pageSize}`;
                 if (status) {
                     url += `&status=${status}`;
+                }
+                if (taskType) {
+                    url += `&task_type=${taskType}`;
+                }
+                if (recognitionMode) {
+                    url += `&recognition_mode=${recognitionMode}`;
                 }
 
                 const response = await fetch(url);
@@ -1479,6 +1558,7 @@ task_001, task_002, task_003
                     html += '<thead><tr>';
                     html += '<th>任务ID</th>';
                     html += '<th>类型</th>';
+                    html += '<th>识别模式</th>';
                     html += '<th>文件名</th>';
                     html += '<th>状态</th>';
                     html += '<th>进度</th>';
@@ -1493,6 +1573,9 @@ task_001, task_002, task_003
                                          task.status === 'processing' ? '处理中' : 
                                          task.status === 'completed' ? '已完成' : 
                                          task.status === 'failed' ? '失败' : '已取消';
+
+                        const recognitionModeText = task.recognition_mode === 'meeting' ? '会议识别' : '默认识别';
+                        const recognitionModeClass = task.recognition_mode === 'meeting' ? 'status-processing' : 'status-completed';
 
                         const callbackStatusText = task.callback_status === 'pending' ? '待回调' : 
                                                   task.callback_status === 'success' ? '回调成功' : 
@@ -1512,6 +1595,7 @@ task_001, task_002, task_003
                         html += `<tr>`;
                         html += `<td><span class="task-id">${task.task_id}</span></td>`;
                         html += `<td>${task.task_type === 'file_upload' ? '<i class="fas fa-upload"></i> 上传' : '<i class="fas fa-link"></i> URL'}</td>`;
+                        html += `<td><span class="status-badge ${recognitionModeClass}">${recognitionModeText}</span></td>`;
                         html += `<td>${task.file_name || '<span style="color: #999;">未命名</span>'}</td>`;
                         html += `<td><span class="status-badge ${statusClass}">${statusText}</span></td>`;
                         html += `<td>${progressBar}</td>`;
@@ -1758,6 +1842,7 @@ task_001, task_002, task_003
             // 初始化事件监听器
             document.getElementById('filterStatus').addEventListener('change', refreshTaskList);
             document.getElementById('filterTaskType').addEventListener('change', refreshTaskList);
+            document.getElementById('filterRecognitionMode').addEventListener('change', refreshTaskList);
             document.getElementById('filterPageSize').addEventListener('change', refreshTaskList);
             document.getElementById('filterDateRange').addEventListener('change', refreshTaskList);
 
@@ -1811,6 +1896,10 @@ task_001, task_002, task_003
             if (bizUniqueId.value) {
                 formData.append('biz_unique_id', bizUniqueId.value);
             }
+            
+            // 获取识别模式
+            const recognitionMode = document.querySelector('input[name="recognitionMode"]:checked').value;
+            formData.append('recognition_mode', recognitionMode);
 
             try {
                 const response = await fetch('/submit_task', {
@@ -1898,6 +1987,10 @@ task_001, task_002, task_003
             if (bizUniqueId.value) {
                 formData.append('biz_unique_id', bizUniqueId.value);
             }
+            
+            // 获取识别模式
+            const recognitionMode = document.querySelector('input[name="recognitionModeUrl"]:checked').value;
+            formData.append('recognition_mode', recognitionMode);
 
             try {
                 const response = await fetch('/submit_task', {
@@ -2076,43 +2169,115 @@ task_001, task_002, task_003
                     `;
 
                     if (result.status === 'completed' && result.result) {
-                        html += `
-                            <div style="margin: 20px 0; padding: 20px; background: #f9f9f9; border-radius: 8px; border: 1px solid #e0e0e0;">
-                                <h4 style="margin-top: 0; color: #4CAF50; display: flex; align-items: center; gap: 10px;">
-                                    <i class="fas fa-file-alt"></i> 识别结果
-                                </h4>
-                                <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #ddd;">
-                                    <p style="font-size: 16px; line-height: 1.6; margin: 0;">${result.result.text || '无识别文本'}</p>
+                        // 检查是否为会议识别结果
+                        if (result.result.dialogue && Array.isArray(result.result.dialogue)) {
+                            // 会议识别结果格式 - 合并连续说话者的内容
+                            const dialogueList = result.result.dialogue;
+                            
+                            // 合并连续说话者的内容
+                            const mergedDialogue = [];
+                            if (dialogueList && dialogueList.length > 0) {
+                                let currentSpeaker = dialogueList[0].speaker;
+                                let currentText = dialogueList[0].text;
+                                let currentStart = dialogueList[0].start_time;
+                                let currentEnd = dialogueList[0].end_time;
+                                
+                                for (let i = 1; i < dialogueList.length; i++) {
+                                    const entry = dialogueList[i];
+                                    
+                                    // 如果是同一说话人，合并内容
+                                    if (entry.speaker === currentSpeaker) {
+                                        currentText += " " + entry.text;
+                                        currentEnd = entry.end_time;
+                                    } else {
+                                        // 不同说话人，保存当前内容并开始新的合并
+                                        mergedDialogue.push({
+                                            speaker: currentSpeaker,
+                                            text: currentText,
+                                            start_time: currentStart,
+                                            end_time: currentEnd
+                                        });
+                                        currentSpeaker = entry.speaker;
+                                        currentText = entry.text;
+                                        currentStart = entry.start_time;
+                                        currentEnd = entry.end_time;
+                                    }
+                                }
+                                
+                                // 添加最后一个合并的段落
+                                mergedDialogue.push({
+                                    speaker: currentSpeaker,
+                                    text: currentText,
+                                    start_time: currentStart,
+                                    end_time: currentEnd
+                                });
+                            }
+                            
+                            html += `
+                                <div style="margin: 20px 0; padding: 20px; background: #f9f9f9; border-radius: 8px; border: 1px solid #e0e0e0;">
+                                    <h4 style="margin-top: 0; color: #4CAF50; display: flex; align-items: center; gap: 10px;">
+                                        <i class="fas fa-users"></i> 会议识别结果
+                                    </h4>
+                                    <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #ddd; max-height: 400px; overflow-y: auto;">
+                            `;
+                            
+                            // 显示合并后的会议对话内容
+                            mergedDialogue.forEach((entry, index) => {
+                                html += `
+                                    <div style="margin-bottom: 15px;">
+                                        <div style="font-weight: bold; color: #2196F3; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 10px;">${entry.speaker}</div>
+                                        <div style="margin: 8px 0; padding: 10px; background: #f5f5f5; border-radius: 4px; border-left: 3px solid #4CAF50;">
+                                            <div style="font-size: 14px; color: #666; margin-bottom: 5px;">[${entry.start_time.toFixed(2)}s - ${entry.end_time.toFixed(2)}s]</div>
+                                            <div style="font-size: 16px; line-height: 1.5;">${entry.text}</div>
+                                        </div>
+                                    </div>
+                                `;
+                            });
+                            
+                            html += `
+                                    </div>
                                 </div>
-                                ${result.result.sentences && result.result.sentences.length > 0 ? `
-                                    <h5 style="margin: 15px 0 10px; color: #666;">句子详情:</h5>
-                                    <table>
-                                        <thead>
-                                            <tr>
-                                                <th>序号</th>
-                                                <th>文本</th>
-                                                <th>开始时间</th>
-                                                <th>结束时间</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            ${result.result.sentences.map((sentence, index) => `
+                            `;
+                        } else {
+                            // 普通识别结果格式
+                            html += `
+                                <div style="margin: 20px 0; padding: 20px; background: #f9f9f9; border-radius: 8px; border: 1px solid #e0e0e0;">
+                                    <h4 style="margin-top: 0; color: #4CAF50; display: flex; align-items: center; gap: 10px;">
+                                        <i class="fas fa-file-alt"></i> 识别结果
+                                    </h4>
+                                    <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #ddd;">
+                                        <p style="font-size: 16px; line-height: 1.6; margin: 0;">${result.result.text || '无识别文本'}</p>
+                                    </div>
+                                    ${result.result.sentences && result.result.sentences.length > 0 ? `
+                                        <h5 style="margin: 15px 0 10px; color: #666;">句子详情:</h5>
+                                        <table>
+                                            <thead>
                                                 <tr>
-                                                    <td>${index + 1}</td>
-                                                    <td>${sentence.text}</td>
-                                                    <td>${sentence.start}s</td>
-                                                    <td>${sentence.end}s</td>
+                                                    <th>序号</th>
+                                                    <th>文本</th>
+                                                    <th>开始时间</th>
+                                                    <th>结束时间</th>
                                                 </tr>
-                                            `).join('')}
-                                        </tbody>
-                                    </table>
-                                ` : ''}
-                            </div>
-                        `;
-                    }
+                                            </thead>
+                                            <tbody>
+                                                ${result.result.sentences.map((sentence, index) => `
+                                                    <tr>
+                                                        <td>${index + 1}</td>
+                                                        <td>${sentence.text}</td>
+                                                        <td>${sentence.start}s</td>
+                                                        <td>${sentence.end}s</td>
+                                                    </tr>
+                                                `).join('')}
+                                            </tbody>
+                                        </table>
+                                    ` : ''}
+                                </div>
+                            `;
+                        }
 
-                    html += `<pre>${JSON.stringify(result, null, 2)}</pre>`;
-                    showNotification('任务结果查询成功', 'success');
+                        html += `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+                        showNotification('任务结果查询成功', 'success');
+                    }
                 } else if (result.code === 1) {
                     html = `
                         <div class="warning-message" style="background: #fff3cd; border-color: #ffeaa7; color: #856404;">
@@ -2294,6 +2459,78 @@ task_001, task_002, task_003
             }
         }
 
+        async function deleteTask() {
+            const taskId = document.getElementById('taskId').value;
+            if (!taskId) {
+                showNotification('请输入任务ID', 'error');
+                return;
+            }
+
+            if (!confirm(`确定要删除任务 ${taskId} 吗？此操作不可恢复！`)) {
+                return;
+            }
+
+            const resultDiv = document.getElementById('taskManagementResultContent');
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 30px;"><div class="loading" style="margin: 0 auto 15px;"></div><div>正在删除任务...</div></div>';
+
+            try {
+                const formData = new FormData();
+                formData.append('task_id', taskId);
+
+                const response = await fetch('/delete_task', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                let html = '';
+                if (result.code === 0) {
+                    html = `
+                        <div class="success-message">
+                            <i class="fas fa-check-circle"></i>
+                            <div>
+                                <strong>任务删除成功！</strong>
+                                <p>任务ID: ${taskId}</p>
+                            </div>
+                        </div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                    showNotification('任务删除成功', 'success');
+
+                    // 清空任务ID输入框
+                    document.getElementById('taskId').value = '';
+
+                    // 刷新统计和列表
+                    getStats();
+                    refreshTaskList();
+                } else {
+                    html = `
+                        <div class="error-message">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <div>
+                                <strong>删除失败！</strong>
+                                <p>${result.msg || '未知错误'}</p>
+                            </div>
+                        </div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                    showNotification('删除失败: ' + (result.msg || '未知错误'), 'error');
+                }
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <div>
+                            <strong>删除失败！</strong>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+                showNotification('删除失败: ' + error.message, 'error');
+            }
+        }
+
         async function batchSubmitJson() {
             const table = document.getElementById('batchFileList');
             if (!table) {
@@ -2365,6 +2602,10 @@ task_001, task_002, task_003
                 const formData = new FormData();
                 formData.append('operation', 'submit');
                 formData.append('file_list', JSON.stringify(fileList));
+                
+                // 获取识别模式
+                const recognitionMode = document.querySelector('input[name="batchRecognitionMode"]:checked').value;
+                formData.append('recognition_mode', recognitionMode);
 
                 const response = await fetch('/batch_operation', {
                     method: 'POST',
@@ -2622,29 +2863,147 @@ task_001, task_002, task_003
 
                 if (result.results && result.results.length > 0) {
                     html += '<div style="margin-top: 20px; max-height: 400px; overflow-y: auto;">';
-                    html += '<table><thead><tr><th>任务ID</th><th>状态</th><th>消息</th></tr></thead><tbody>';
+                    
+                    // 检查是否为结果查询操作，需要展示详细结果
+                    if (operationName.includes('结果')) {
+                        html += '<div class="batch-results-container">';
+                        
+                        result.results.forEach((itemResult, index) => {
+                            if (itemResult.code === 0) {
+                                html += `
+                                    <div class="batch-result-item" style="margin-bottom: 20px; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background: #f9f9f9;">
+                                        <div style="font-weight: bold; color: #2E7D32; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                                            <span>任务 ${index + 1}: ${itemResult.task_id}</span>
+                                            <span class="status-badge status-completed">已完成</span>
+                                        </div>
+                                `;
+                                
+                                // 检查是否为会议识别结果
+                                if (itemResult.result && itemResult.result.dialogue && Array.isArray(itemResult.result.dialogue)) {
+                                    // 会议识别结果格式 - 合并连续说话者的内容
+                                    const dialogueList = itemResult.result.dialogue;
+                                    
+                                    // 合并连续说话者的内容
+                                    const mergedDialogue = [];
+                                    if (dialogueList && dialogueList.length > 0) {
+                                        let currentSpeaker = dialogueList[0].speaker;
+                                        let currentText = dialogueList[0].text;
+                                        let currentStart = dialogueList[0].start_time;
+                                        let currentEnd = dialogueList[0].end_time;
+                                        
+                                        for (let i = 1; i < dialogueList.length; i++) {
+                                            const entry = dialogueList[i];
+                                            
+                                            // 如果是同一说话人，合并内容
+                                            if (entry.speaker === currentSpeaker) {
+                                                currentText += " " + entry.text;
+                                                currentEnd = entry.end_time;
+                                            } else {
+                                                // 不同说话人，保存当前内容并开始新的合并
+                                                mergedDialogue.push({
+                                                    speaker: currentSpeaker,
+                                                    text: currentText,
+                                                    start_time: currentStart,
+                                                    end_time: currentEnd
+                                                });
+                                                currentSpeaker = entry.speaker;
+                                                currentText = entry.text;
+                                                currentStart = entry.start_time;
+                                                currentEnd = entry.end_time;
+                                            }
+                                        }
+                                        
+                                        // 添加最后一个合并的段落
+                                        mergedDialogue.push({
+                                            speaker: currentSpeaker,
+                                            text: currentText,
+                                            start_time: currentStart,
+                                            end_time: currentEnd
+                                        });
+                                    }
+                                    
+                                    html += `
+                                        <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #ddd; margin-top: 10px;">
+                                            <h5 style="margin-top: 0; color: #4CAF50; display: flex; align-items: center; gap: 10px;">
+                                                <i class="fas fa-users"></i> 会议识别结果
+                                            </h5>
+                                    `;
+                                    
+                                    // 显示合并后的会议对话内容
+                                    mergedDialogue.forEach((entry, idx) => {
+                                        html += `
+                                            <div style="margin-bottom: 15px;">
+                                                <div style="font-weight: bold; color: #2196F3; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 10px;">${entry.speaker}</div>
+                                                <div style="margin: 8px 0; padding: 10px; background: #f5f5f5; border-radius: 4px; border-left: 3px solid #4CAF50;">
+                                                    <div style="font-size: 14px; color: #666; margin-bottom: 5px;">[${entry.start_time.toFixed(2)}s - ${entry.end_time.toFixed(2)}s]</div>
+                                                    <div style="font-size: 16px; line-height: 1.5;">${entry.text}</div>
+                                                </div>
+                                            </div>
+                                        `;
+                                    });
+                                    
+                                    html += '</div></div>';
+                                } else if (itemResult.result && itemResult.result.text) {
+                                    // 普通识别结果格式
+                                    html += `
+                                        <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #ddd; margin-top: 10px;">
+                                            <h5 style="margin-top: 0; color: #4CAF50; display: flex; align-items: center; gap: 10px;">
+                                                <i class="fas fa-file-alt"></i> 识别结果
+                                            </h5>
+                                            <p style="font-size: 16px; line-height: 1.6; margin: 0;">${itemResult.result.text}</p>
+                                        </div>
+                                    </div>
+                                    `;
+                                } else {
+                                    html += `
+                                        <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #ddd; margin-top: 10px;">
+                                            <p style="color: #666; margin: 0;">无识别结果</p>
+                                        </div>
+                                    </div>
+                                    `;
+                                }
+                            } else {
+                                html += `
+                                    <div class="batch-result-item" style="margin-bottom: 20px; padding: 15px; border: 1px solid #f5c6cb; border-radius: 8px; background: #fdf0f0;">
+                                        <div style="font-weight: bold; color: #c62828; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                                            <span>任务 ${index + 1}: ${itemResult.task_id || 'N/A'}</span>
+                                            <span class="status-badge status-failed">失败</span>
+                                        </div>
+                                        <div style="color: #c62828;">错误: ${itemResult.msg || '操作失败'}</div>
+                                    </div>
+                                `;
+                            }
+                        });
+                        
+                        html += '</div>';
+                    } else {
+                        // 其他操作（状态查询、取消、删除等）的表格展示
+                        html += '<table><thead><tr><th>任务ID</th><th>状态</th><th>消息</th></tr></thead><tbody>';
 
-                    result.results.forEach(itemResult => {
-                        if (itemResult.code === 0) {
-                            html += `
-                                <tr style="background-color: #f0f9f0;">
-                                    <td>${itemResult.task_id || '-'}</td>
-                                    <td><span class="status-badge status-completed">成功</span></td>
-                                    <td>${itemResult.msg || '操作成功'}</td>
-                                </tr>
-                            `;
-                        } else {
-                            html += `
-                                <tr style="background-color: #fdf0f0;">
-                                    <td>${itemResult.task_id || '-'}</td>
-                                    <td><span class="status-badge status-failed">失败</span></td>
-                                    <td>${itemResult.msg || '操作失败'}</td>
-                                </tr>
-                            `;
-                        }
-                    });
+                        result.results.forEach(itemResult => {
+                            if (itemResult.code === 0) {
+                                html += `
+                                    <tr style="background-color: #f0f9f0;">
+                                        <td>${itemResult.task_id || '-'}</td>
+                                        <td><span class="status-badge status-completed">成功</span></td>
+                                        <td>${itemResult.msg || '操作成功'}</td>
+                                    </tr>
+                                `;
+                            } else {
+                                html += `
+                                    <tr style="background-color: #fdf0f0;">
+                                        <td>${itemResult.task_id || '-'}</td>
+                                        <td><span class="status-badge status-failed">失败</span></td>
+                                        <td>${itemResult.msg || '操作失败'}</td>
+                                    </tr>
+                                `;
+                            }
+                        });
 
-                    html += '</tbody></table></div>';
+                        html += '</tbody></table>';
+                    }
+
+                    html += '</div>';
                 }
 
                 html += `<pre style="margin-top: 20px;">${JSON.stringify(result, null, 2)}</pre>`;
@@ -2669,8 +3028,6 @@ task_001, task_002, task_003
             }
             resultDiv.innerHTML = html;
         }
-
-        // 保留旧函数的兼容性包装
         async function getTaskByBizId() {
             showNotification('此功能已迁移到高级查询区域', 'info');
         }
@@ -2683,8 +3040,9 @@ task_001, task_002, task_003
             const bizUniqueId = document.getElementById('advancedBizUniqueId').value;
             const appId = document.getElementById('advancedAppId').value;
             const bizType = document.getElementById('advancedBizType').value;
+            const recognitionMode = document.getElementById('advancedRecognitionMode').value;
 
-            if (!bizUniqueId && !appId && !bizType) {
+            if (!bizUniqueId && !appId && !bizType && !recognitionMode) {
                 showNotification('请至少填写一个查询条件', 'error');
                 return;
             }
@@ -2705,6 +3063,9 @@ task_001, task_002, task_003
                     if (appId) {
                         params.append('app_id', appId);
                     }
+                    if (recognitionMode) {
+                        params.append('recognition_mode', recognitionMode);
+                    }
                     url = `/get_task_by_biz_id?${params.toString()}`;
                 } else {
                     // 如果没有业务唯一ID，使用list_tasks_by_app接口
@@ -2713,6 +3074,9 @@ task_001, task_002, task_003
                     }
                     if (bizType) {
                         params.append('biz_type', bizType);
+                    }
+                    if (recognitionMode) {
+                        params.append('recognition_mode', recognitionMode);
                     }
                     params.append('page', '1');
                     params.append('page_size', '10');
@@ -2731,6 +3095,8 @@ task_001, task_002, task_003
                                     task.status === 'completed' ? '已完成' : 
                                     task.status === 'failed' ? '失败' : '已取消';
 
+                    const recognitionModeText = task.recognition_mode === 'meeting' ? '会议识别' : '默认识别';
+                    const recognitionModeClass = task.recognition_mode === 'meeting' ? 'status-processing' : 'status-completed';
                     const statusClass = `status-${task.status}`;
 
                     html = `
@@ -2750,6 +3116,10 @@ task_001, task_002, task_003
                                 <tr>
                                     <td style="font-weight: 600;">任务状态:</td>
                                     <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                                </tr>
+                                <tr>
+                                    <td style="font-weight: 600;">识别模式:</td>
+                                    <td><span class="status-badge ${recognitionModeClass}">${recognitionModeText}</span></td>
                                 </tr>
                                 <tr>
                                     <td style="font-weight: 600;">文件名称:</td>
@@ -2782,7 +3152,7 @@ task_001, task_002, task_003
                             <i class="fas fa-check-circle"></i>
                             <div>
                                 <strong>查询成功</strong>
-                                <p>应用ID: ${appId || '-'} | 业务类型: ${bizType || '-'} | 共找到 ${result.total} 个任务</p>
+                                <p>应用ID: ${appId || '-'} | 业务类型: ${bizType || '-'} | 识别模式: ${recognitionMode || '全部'} | 共找到 ${result.total} 个任务</p>
                             </div>
                         </div>
                         <div style="margin-top: 20px;">
@@ -2791,6 +3161,7 @@ task_001, task_002, task_003
                                     <tr>
                                         <th>任务ID</th>
                                         <th>任务类型</th>
+                                        <th>识别模式</th>
                                         <th>文件名称</th>
                                         <th>状态</th>
                                         <th>创建时间</th>
@@ -2804,6 +3175,8 @@ task_001, task_002, task_003
                                         task.status === 'processing' ? '处理中' : 
                                         task.status === 'completed' ? '已完成' : 
                                         task.status === 'failed' ? '失败' : '已取消';
+                        const recognitionModeText = task.recognition_mode === 'meeting' ? '会议识别' : '默认识别';
+                        const recognitionModeClass = task.recognition_mode === 'meeting' ? 'status-processing' : 'status-completed';
 
                         const statusClass = `status-${task.status}`;
                         const createdTime = new Date(task.created_time * 1000).toLocaleString();
@@ -2812,6 +3185,7 @@ task_001, task_002, task_003
                             <tr>
                                 <td><span class="task-id">${task.task_id}</span></td>
                                 <td>${task.task_type}</td>
+                                <td><span class="status-badge ${recognitionModeClass}">${recognitionModeText}</span></td>
                                 <td>${task.file_name || '-'}</td>
                                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                                 <td>${createdTime}</td>
@@ -2851,187 +3225,6 @@ task_001, task_002, task_003
                         </div>
                     `;
                     showNotification('未找到对应的任务', 'warning');
-                }
-                resultDiv.innerHTML = html;
-            } catch (error) {
-                resultDiv.innerHTML = `
-                    <div class="error-message">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <div>
-                            <strong>查询失败！</strong>
-                            <p>${error.message}</p>
-                        </div>
-                    </div>
-                `;
-                showNotification('查询失败: ' + error.message, 'error');
-            }
-        }
-
-        async function advancedSearch() {
-            const bizUniqueId = document.getElementById('advancedBizUniqueId').value;
-            const appId = document.getElementById('advancedAppId').value;
-            const bizType = document.getElementById('advancedBizType').value;
-
-            if (!bizUniqueId && !appId && !bizType) {
-                showNotification('请至少填写一个查询条件', 'error');
-                return;
-            }
-
-            const resultDiv = document.getElementById('taskManagementResultContent');
-            resultDiv.innerHTML = '<div style="text-align: center; padding: 30px;"><div class="loading" style="margin: 0 auto 15px;"></div><div>正在执行高级查询...</div></div>';
-
-            try {
-                let url;
-                const params = new URLSearchParams();
-                
-                // 根据是否提供bizUniqueId选择API
-                if (bizUniqueId) {
-                    if (appId) {
-                        params.append('app_id', appId);
-                    }
-                    params.append('biz_unique_id', bizUniqueId);
-                    url = `/get_task_by_biz_id?${params.toString()}`;
-                } else {
-                    if (!appId && !bizType) {
-                        showNotification('请至少填写应用ID或业务类型', 'error');
-                        return;
-                    }
-                    if (appId) {
-                        params.append('app_id', appId);
-                    }
-                    if (bizType) {
-                        params.append('biz_type', bizType);
-                    }
-                    params.append('page', '1');
-                    params.append('page_size', '10');
-                    url = `/list_tasks_by_app?${params.toString()}`;
-                }
-
-                const response = await fetch(url);
-                const result = await response.json();
-
-                let html = '';
-                if (result.code === 0) {
-                    if (result.task) {
-                        // 单个任务结果（来自get_task_by_biz_id）
-                        const task = result.task;
-                        const statusText = task.status === 'pending' ? '待处理' : 
-                                        task.status === 'processing' ? '处理中' : 
-                                        task.status === 'completed' ? '已完成' : 
-                                        task.status === 'failed' ? '失败' : '已取消';
-
-                        const statusClass = `status-${task.status}`;
-
-                        html = `
-                            <div class="success-message">
-                                <i class="fas fa-check-circle"></i>
-                                <div>
-                                    <strong>任务查询成功</strong>
-                                    ${bizUniqueId ? `<p>业务唯一ID: ${bizUniqueId}</p>` : ''}
-                                </div>
-                            </div>
-                            <div style="margin: 20px 0;">
-                                <table>
-                                    <tr>
-                                        <td style="width: 120px; font-weight: 600;">任务ID:</td>
-                                        <td><span class="task-id">${task.task_id}</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td style="font-weight: 600;">任务状态:</td>
-                                        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td style="font-weight: 600;">文件名称:</td>
-                                        <td>${task.file_name || '-'}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="font-weight: 600;">应用ID:</td>
-                                        <td>${task.app_id || '-'}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="font-weight: 600;">业务类型:</td>
-                                        <td>${task.biz_type || '-'}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="font-weight: 600;">创建时间:</td>
-                                        <td>${new Date(task.created_time * 1000).toLocaleString()}</td>
-                                    </tr>
-                                </table>
-                            </div>
-                        `;
-
-                        // 自动填充任务ID到管理输入框
-                        document.getElementById('taskId').value = task.task_id;
-                    } else if (result.tasks && result.tasks.length > 0) {
-                        // 任务列表结果（来自list_tasks_by_app）
-                        html = `
-                            <div class="success-message">
-                                <i class="fas fa-check-circle"></i>
-                                <div>
-                                    <strong>查询成功，找到 ${result.tasks.length} 个任务</strong>
-                                </div>
-                            </div>
-                            <div style="margin: 20px 0;">
-                                <table class="task-list-table">
-                                    <thead>
-                                        <tr>
-                                            <th>任务ID</th>
-                                            <th>文件名称</th>
-                                            <th>应用ID</th>
-                                            <th>业务类型</th>
-                                            <th>任务状态</th>
-                                            <th>创建时间</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                        `;
-
-                        result.tasks.forEach(task => {
-                            const statusText = task.status === 'pending' ? '待处理' : 
-                                            task.status === 'processing' ? '处理中' : 
-                                            task.status === 'completed' ? '已完成' : 
-                                            task.status === 'failed' ? '失败' : '已取消';
-
-                            const statusClass = `status-${task.status}`;
-
-                            html += `
-                                        <tr>
-                                            <td><span class="task-id">${task.task_id}</span></td>
-                                            <td>${task.file_name || '-'}</td>
-                                            <td>${task.app_id || '-'}</td>
-                                            <td>${task.biz_type || '-'}</td>
-                                            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                                            <td>${new Date(task.created_time * 1000).toLocaleString()}</td>
-                                        </tr>
-                            `;
-                        });
-
-                        html += `
-                                    </tbody>
-                                </table>
-                            </div>
-                        `;
-                    } else {
-                        html = `
-                            <div class="info-message">
-                                <i class="fas fa-info-circle"></i>
-                                <div>
-                                    <strong>未找到符合条件的任务</strong>
-                                </div>
-                            </div>
-                        `;
-                    }
-                } else {
-                    html = `
-                        <div class="error-message">
-                            <i class="fas fa-exclamation-circle"></i>
-                            <div>
-                                <strong>查询失败！</strong>
-                                <p>${result.msg || '查询过程中发生错误'}</p>
-                            </div>
-                        </div>
-                    `;
-                    showNotification('查询失败: ' + (result.msg || '查询过程中发生错误'), 'error');
                 }
                 resultDiv.innerHTML = html;
             } catch (error) {

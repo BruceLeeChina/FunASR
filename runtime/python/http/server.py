@@ -97,6 +97,7 @@ model = AutoModel(
     vad_model_revision=args.vad_model_revision,
     punc_model=args.punc_model,
     punc_model_revision=args.punc_model_revision,
+    spk_model="cam++",
     ngpu=args.ngpu,
     ncpu=args.ncpu,
     device=args.device,
@@ -115,6 +116,13 @@ templates = Jinja2Templates(directory="templates")
 app.mount("/data", StaticFiles(directory="data"), name="data")
 
 param_dict = {"sentence_timestamp": True, "batch_size_s": 300}
+# 会议识别参数配置
+meeting_param_dict = {
+    "sentence_timestamp": True,
+    "batch_size_s": 300,
+    "frontend": "fused_vad"  # 启用VAD功能
+}
+
 if args.hotword_path is not None and os.path.exists(args.hotword_path):
     with open(args.hotword_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
@@ -122,6 +130,7 @@ if args.hotword_path is not None and os.path.exists(args.hotword_path):
     hotword = " ".join(lines)
     logger.info(f"热词：{hotword}")
     param_dict["hotword"] = hotword
+    meeting_param_dict["hotword"] = hotword
 
 
 # 任务状态枚举
@@ -226,7 +235,8 @@ async def init_db():
         callback_status TEXT,
         app_id TEXT,
         biz_type TEXT,
-        biz_unique_id TEXT UNIQUE
+        biz_unique_id TEXT UNIQUE,
+        recognition_mode TEXT DEFAULT 'default'
     )
     ''')
 
@@ -314,51 +324,143 @@ async def send_callback_notification(task_id: str, callback_url: str) -> bool:
         return False
 
 
-async def process_audio_file(audio_path: str) -> Dict[str, Any]:
+# 全局会议识别模型实例，避免重复初始化
+meeting_model = None
+
+def init_meeting_model():
+    """
+    初始化会议识别模型
+    """
+    global meeting_model
+    if meeting_model is None:
+        print("正在初始化会议识别模型...")
+        meeting_model = AutoModel(
+            model="paraformer-zh",  # ASR模型
+            vad_model="fsmn-vad",  # 语音活动检测模型
+            punc_model="ct-punc",  # 标点符号模型
+            spk_model="cam++"  # 说话人识别模型
+        )
+        print("会议识别模型初始化完成")
+
+def process_meeting_audio(audio_path):
+    """
+    处理会议音频并返回对话格式结果
+    """
+    global meeting_model
+    print(f"正在处理会议音频: {audio_path}")
+    
+    # 初始化模型（如果尚未初始化）
+    if meeting_model is None:
+        init_meeting_model()
+
+    print("开始识别会议音频...")
+    # 生成识别结果
+    result = meeting_model.generate(
+        input=audio_path,
+        batch_size_s=300,
+        hotword=""
+    )
+
+    print(f"模型返回原始结果: {result}")  # 添加调试输出
+
+    # 解析结果并格式化为对话
+    formatted_dialogue = []
+    if result and len(result) > 0:
+        result_item = result[0]
+        
+        # 检查是否包含sentence_info（包含说话人信息）
+        if isinstance(result_item, dict) and 'sentence_info' in result_item:
+            sentences = result_item['sentence_info']
+            print(f"检测到 {len(sentences)} 个带说话人信息的语音段")
+            
+            for i, seg in enumerate(sentences):
+                print(f"处理第 {i+1} 个片段: {seg}")  # 调试信息
+                dialogue_entry = {
+                    'speaker': f'Speaker {seg.get("spk", "Unknown")}',
+                    'text': seg.get('text', ''),
+                    'start_time': seg.get('start', 0) / 1000.0,  # 转换为秒
+                    'end_time': seg.get('end', 0) / 1000.0  # 转换为秒
+                }
+                formatted_dialogue.append(dialogue_entry)
+        else:
+            # 如果没有sentence_info，尝试其他结构
+            print("未找到sentence_info，尝试其他结构...")
+            # 可能是整体文本，尝试按时间戳分割
+            if isinstance(result_item, dict) and 'timestamp' in result_item and 'text' in result_item:
+                text = result_item['text']
+                timestamps = result_item['timestamp']
+                
+                # 简单按时间戳分割
+                for i, ts in enumerate(timestamps):
+                    if len(ts) >= 2:
+                        start_time, end_time = ts
+                        dialogue_entry = {
+                            'speaker': 'Speaker Unknown',
+                            'text': text,  # 这里无法准确分割文本
+                            'start_time': start_time / 1000.0,
+                            'end_time': end_time / 1000.0
+                        }
+                        formatted_dialogue.append(dialogue_entry)
+
+    return formatted_dialogue
+
+
+
+
+
+async def process_audio_file(audio_path: str, is_meeting_mode: bool = False) -> Dict[str, Any]:
     """处理音频文件并进行识别"""
     loop = asyncio.get_event_loop()
     # 使用线程池执行CPU密集型的ASR任务
-    func = partial(_process_audio_sync, audio_path)
+    func = partial(_process_audio_sync, audio_path, is_meeting_mode)
     result = await loop.run_in_executor(asr_thread_pool, func)
     return result
 
-def _process_audio_sync(audio_path: str) -> Dict[str, Any]:
+def _process_audio_sync(audio_path: str, is_meeting_mode: bool = False) -> Dict[str, Any]:
     """在单独线程中执行的实际音频处理函数"""
     try:
-        # 使用ffmpeg转换音频格式
-        audio_bytes, _ = (
-            ffmpeg.input(audio_path, threads=0)
-            .output("-", format="s16le", acodec="pcm_s16le", ac=1, ar=16000)
-            .run(cmd=["ffmpeg", "-nostdin"], capture_stdout=True, capture_stderr=True)
-        )
-
-        # 进行语音识别
-        rec_results = model.generate(input=audio_bytes, is_final=True, **param_dict)
-
-        # 解析识别结果
-        if len(rec_results) > 0 and "text" in rec_results[0]:
-            rec_result = rec_results[0]
-            text = rec_result["text"]
-            sentences = []
-            if "sentence_info" in rec_result:
-                for sentence in rec_result["sentence_info"]:
-                    sentences.append({
-                        "text": sentence["text"],
-                        "start": sentence["start"],
-                        "end": sentence["end"]
-                    })
-
+        if is_meeting_mode:
+            # 会议识别模式 - 直接在同步函数中处理
+            formatted_dialogue = process_meeting_audio(audio_path)
             return {
-                "text": text,
-                "sentences": sentences,
+                "dialogue": formatted_dialogue,
                 "code": 0
             }
         else:
-            return {
-                "text": "",
-                "sentences": [],
-                "code": 0
-            }
+            # 使用ffmpeg转换音频格式
+            audio_bytes, _ = (
+                ffmpeg.input(audio_path, threads=0)
+                .output("-", format="s16le", acodec="pcm_s16le", ac=1, ar=16000)
+                .run(cmd=["ffmpeg", "-nostdin"], capture_stdout=True, capture_stderr=True)
+            )
+
+            # 进行语音识别
+            rec_results = model.generate(input=audio_bytes, is_final=True, **param_dict)
+
+            # 解析识别结果
+            if len(rec_results) > 0 and "text" in rec_results[0]:
+                rec_result = rec_results[0]
+                text = rec_result["text"]
+                sentences = []
+                if "sentence_info" in rec_result:
+                    for sentence in rec_result["sentence_info"]:
+                        sentences.append({
+                            "text": sentence["text"],
+                            "start": sentence["start"],
+                            "end": sentence["end"]
+                        })
+
+                return {
+                    "text": text,
+                    "sentences": sentences,
+                    "code": 0
+                }
+            else:
+                return {
+                    "text": "",
+                    "sentences": [],
+                    "code": 0
+                }
     except Exception as e:
         logger.error(f"处理音频文件时发生错误: {e}")
         raise
@@ -418,17 +520,17 @@ async def task_processor():
                     continue
 
                 # 获取任务详细信息
-                db_task_info = await db_pool.fetchone("SELECT task_type, file_path, file_url, file_name FROM tasks WHERE task_id = ?",
+                db_task_info = await db_pool.fetchone("SELECT task_type, file_path, file_url, file_name, recognition_mode FROM tasks WHERE task_id = ?",
                                (task_id,))
 
                 if not db_task_info:
                     logger.error(f"任务{task_id}信息不存在于数据库中")
                     raise Exception("任务信息不存在")
 
-                task_type, file_path, file_url, file_name = db_task_info
+                task_type, file_path, file_url, file_name, recognition_mode = db_task_info
                 audio_path = file_path
                 logger.debug(
-                    f"任务{task_id}信息: task_type={task_type}, file_path={file_path}, file_url={file_url}, file_name={file_name}")
+                    f"任务{task_id}信息: task_type={task_type}, file_path={file_path}, file_url={file_url}, file_name={file_name}, recognition_mode={recognition_mode}")
 
                 # 根据任务类型处理
                 if task_type == "file_url" and file_url:
@@ -451,7 +553,9 @@ async def task_processor():
                                (int(time.time()), task_id))
                 logger.info(f"任务{task_id}开始进行语音识别")
 
-                result = await process_audio_file(audio_path)
+                # 判断是否为会议识别模式
+                is_meeting_mode = recognition_mode == "meeting"
+                result = await process_audio_file(audio_path, is_meeting_mode=is_meeting_mode)
                 logger.debug(f"任务{task_id}语音识别完成，结果: {result}")
 
                 # 将结果转换为标准JSON字符串存储
@@ -546,7 +650,8 @@ async def submit_task(
         callback_url: Optional[str] = Form(None, description="任务完成后回调URL"),
         app_id: Optional[str] = Form(None, description="应用ID"),
         biz_type: Optional[str] = Form(None, description="业务类型"),
-        biz_unique_id: Optional[str] = Form(None, description="业务唯一ID")
+        biz_unique_id: Optional[str] = Form(None, description="业务唯一ID"),
+        recognition_mode: Optional[str] = Form("default", description="识别模式: default 或 meeting")
 ):
     """提交识别任务"""
     if not file and not file_url:
@@ -568,9 +673,9 @@ async def submit_task(
 
     # 插入任务记录
     await db_pool.execute(
-        "INSERT INTO tasks (task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time, callback_url, callback_status, app_id, biz_type, biz_unique_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO tasks (task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time, callback_url, callback_status, app_id, biz_type, biz_unique_id, recognition_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (task_id, task_type, file_path, file_url, file_name, TaskStatus.PENDING.value, 0, "", "", current_time,
-         current_time, callback_url, "pending", app_id, biz_type, biz_unique_id)
+         current_time, callback_url, "pending", app_id, biz_type, biz_unique_id, recognition_mode)
     )
 
     # 将任务加入队列
@@ -716,15 +821,38 @@ async def delete_task(task_id: str = Form(..., description="任务ID")):
 @app.get("/list_tasks")
 async def list_tasks(page: int = Query(1, ge=1, description="页码"),
                      page_size: int = Query(10, ge=1, le=100, description="每页数量"),
-                     status: Optional[str] = Query(None, description="任务状态过滤")):
+                     status: Optional[str] = Query(None, description="任务状态过滤"),
+                     task_type: Optional[str] = Query(None, description="任务类型过滤"),
+                     recognition_mode: Optional[str] = Query(None, description="识别模式过滤")):
     """查询任务列表"""
     try:
+        # 将空字符串转换为None
+        if status == "":
+            status = None
+        if task_type == "":
+            task_type = None
+        if recognition_mode == "":
+            recognition_mode = None
+            
         offset = (page - 1) * page_size
-        where_clause = "" if status is None else "WHERE status = ?"
-        params = () if status is None else (status,)
+        # 构建查询条件
+        conditions = []
+        params = []
+        
+        if status:
+            conditions.append("status = ?")
+            params.append(status)
+        if task_type:
+            conditions.append("task_type = ?")
+            params.append(task_type)
+        if recognition_mode:
+            conditions.append("recognition_mode = ?")
+            params.append(recognition_mode)
+        
+        where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
 
         tasks = await db_pool.fetchall(
-            f"SELECT task_id, task_type, file_name, status, created_time, updated_time, callback_status FROM tasks {where_clause} ORDER BY created_time DESC LIMIT ? OFFSET ?",
+            f"SELECT task_id, task_type, file_name, status, progress, created_time, updated_time, callback_status, biz_type, biz_unique_id, recognition_mode FROM tasks {where_clause} ORDER BY created_time DESC LIMIT ? OFFSET ?",
             (*params, page_size, offset)
         )
 
@@ -739,9 +867,13 @@ async def list_tasks(page: int = Query(1, ge=1, description="页码"),
                 "task_type": task[1],
                 "file_name": task[2],
                 "status": task[3],
-                "created_time": task[4],
-                "updated_time": task[5],
-                "callback_status": task[6]
+                "progress": task[4],
+                "created_time": task[5],
+                "updated_time": task[6],
+                "callback_status": task[7],
+                "biz_type": task[8],
+                "biz_unique_id": task[9],
+                "recognition_mode": task[10]
             })
 
         return {"code": 0, "msg": "查询任务列表成功", "tasks": task_list, "total": total, "page": page,
@@ -756,7 +888,7 @@ async def get_task_details(task_id: str = Query(..., description="任务ID")):
     """查询任务详情"""
     try:
         task = await db_pool.fetchone(
-            "SELECT task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time, callback_status FROM tasks WHERE task_id = ?",
+            "SELECT task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time, callback_status, recognition_mode FROM tasks WHERE task_id = ?",
             (task_id,)
         )
 
@@ -776,7 +908,8 @@ async def get_task_details(task_id: str = Query(..., description="任务ID")):
             "error_message": task[8],
             "created_time": task[9],
             "updated_time": task[10],
-            "callback_status": task[11]
+            "callback_status": task[11],
+            "recognition_mode": task[12]
         }
 
         return {"code": 0, "msg": "查询任务详情成功", "task": task_info}
@@ -928,7 +1061,7 @@ async def batch_get_task_details(task_ids: str = Form(..., description="任务ID
     # 批量查询任务详情
     placeholders = ",".join(["?"] * len(task_list))
     results = await db_pool.fetchall(
-        f"SELECT task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time FROM tasks WHERE task_id IN ({placeholders})",
+        f"SELECT task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time, recognition_mode FROM tasks WHERE task_id IN ({placeholders})",
         task_list
     )
 
@@ -948,7 +1081,8 @@ async def batch_get_task_details(task_ids: str = Form(..., description="任务ID
             "progress": progress,
             "error_msg": error_msg,
             "created_time": created_time,
-            "updated_time": updated_time
+            "updated_time": updated_time,
+            "recognition_mode": recognition_mode
         }
 
         if status == TaskStatus.COMPLETED.value and result_data:
@@ -989,7 +1123,8 @@ async def batch_operation(
                                         description='文件列表，JSON格式: [{"file_url":"xxx","file_name":"xxx","callback_url":"xx"}]'),
         app_id: Optional[str] = Form(None, description="应用ID"),
         biz_type: Optional[str] = Form(None, description="业务类型"),
-        biz_unique_id: Optional[str] = Form(None, description="业务唯一ID")
+        biz_unique_id: Optional[str] = Form(None, description="业务唯一ID"),
+        recognition_mode: Optional[str] = Form("default", description="识别模式: default 或 meeting")
 ):
     """批量操作"""
     results = []
@@ -1041,11 +1176,11 @@ async def batch_operation(
 
                 # 插入任务记录
                 await db_pool.execute(
-                    "INSERT INTO tasks (task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time, callback_url, callback_status, app_id, biz_type, biz_unique_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO tasks (task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time, callback_url, callback_status, app_id, biz_type, biz_unique_id, recognition_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                     task_id, "file_url", "", file_url, file_name or f"batch_{task_id}.wav", TaskStatus.PENDING.value, 0,
                     "", "", current_time, current_time, item_callback_url, "pending", item_app_id, item_biz_type,
-                    item_biz_unique_id)
+                    item_biz_unique_id, recognition_mode)
                 )
 
                 # 将任务加入队列
@@ -1204,7 +1339,8 @@ async def api_recognition(audio: UploadFile = File(..., description="audio file"
 @app.get("/get_task_by_biz_id")
 async def get_task_by_biz_id(
         biz_unique_id: Optional[str] = Query(None, description="业务唯一ID"),
-        app_id: Optional[str] = Query(None, description="应用ID")
+        app_id: Optional[str] = Query(None, description="应用ID"),
+        recognition_mode: Optional[str] = Query(None, description="识别模式")
 ):
     """根据业务唯一ID和应用ID查询任务，至少需要提供一个条件"""
     try:
@@ -1213,27 +1349,37 @@ async def get_task_by_biz_id(
             biz_unique_id = None
         if app_id == "":
             app_id = None
+        if recognition_mode == "":
+            recognition_mode = None
             
         # 验证至少提供一个查询条件
         if not biz_unique_id and not app_id:
             raise HTTPException(status_code=400, detail="请至少提供一个查询条件")
             
         # 构建查询条件
-        if biz_unique_id and app_id:
-            task = await db_pool.fetchone(
-                "SELECT task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time, callback_status, app_id, biz_type, biz_unique_id FROM tasks WHERE biz_unique_id = ? AND app_id = ?",
-                (biz_unique_id, app_id)
-            )
-        elif biz_unique_id:
-            task = await db_pool.fetchone(
-                "SELECT task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time, callback_status, app_id, biz_type, biz_unique_id FROM tasks WHERE biz_unique_id = ?",
-                (biz_unique_id,)
-            )
-        else:  # 只有app_id
-            task = await db_pool.fetchone(
-                "SELECT task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time, callback_status, app_id, biz_type, biz_unique_id FROM tasks WHERE app_id = ?",
-                (app_id,)
-            )
+        query_conditions = []
+        query_params = []
+        
+        # 基础查询字段
+        base_query = "SELECT task_id, task_type, file_path, file_url, file_name, status, progress, result, error_msg, created_time, updated_time, callback_status, app_id, biz_type, biz_unique_id, recognition_mode FROM tasks WHERE "
+        
+        # 添加查询条件
+        if biz_unique_id:
+            query_conditions.append("biz_unique_id = ?")
+            query_params.append(biz_unique_id)
+        
+        if app_id:
+            query_conditions.append("app_id = ?")
+            query_params.append(app_id)
+        
+        if recognition_mode:
+            query_conditions.append("recognition_mode = ?")
+            query_params.append(recognition_mode)
+        
+        # 构建完整查询语句
+        query = base_query + " AND ".join(query_conditions)
+        
+        task = await db_pool.fetchone(query, tuple(query_params))
 
         if not task:
             raise HTTPException(status_code=404, detail="任务不存在")
@@ -1254,7 +1400,8 @@ async def get_task_by_biz_id(
             "callback_status": task[11],
             "app_id": task[12],
             "biz_type": task[13],
-            "biz_unique_id": task[14]
+            "biz_unique_id": task[14],
+            "recognition_mode": task[15]
         }
 
         return {"code": 0, "msg": "查询任务详情成功", "task": task_info}
@@ -1266,6 +1413,7 @@ async def get_task_by_biz_id(
 async def list_tasks_by_app(
         app_id: Optional[str] = Query(None, description="应用ID"),
         biz_type: Optional[str] = Query(None, description="业务类型"),
+        recognition_mode: Optional[str] = Query(None, description="识别模式"),
         page: int = Query(1, ge=1, description="页码"),
         page_size: int = Query(10, ge=1, le=100, description="每页数量")
 ):
@@ -1276,25 +1424,33 @@ async def list_tasks_by_app(
             app_id = None
         if biz_type == "":
             biz_type = None
+        if recognition_mode == "":
+            recognition_mode = None
             
         # 验证至少提供一个查询条件
-        if not app_id and not biz_type:
+        if not app_id and not biz_type and not recognition_mode:
             raise HTTPException(status_code=400, detail="请至少提供一个查询条件")
             
         offset = (page - 1) * page_size
         # 构建查询条件
-        if app_id and biz_type:
-            where_clause = "WHERE app_id = ? AND biz_type = ?"
-            params = (app_id, biz_type)
-        elif app_id:
-            where_clause = "WHERE app_id = ?"
-            params = (app_id,)
-        else:  # 只有biz_type
-            where_clause = "WHERE biz_type = ?"
-            params = (biz_type,)
+        conditions = []
+        params = []
+        
+        if app_id:
+            conditions.append("app_id = ?")
+            params.append(app_id)
+        if biz_type:
+            conditions.append("biz_type = ?")
+            params.append(biz_type)
+        if recognition_mode:
+            conditions.append("recognition_mode = ?")
+            params.append(recognition_mode)
+        
+        where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
+        params = tuple(params)
 
         tasks = await db_pool.fetchall(
-            f"SELECT task_id, task_type, file_name, status, created_time, updated_time, callback_status, biz_type, biz_unique_id FROM tasks {where_clause} ORDER BY created_time DESC LIMIT ? OFFSET ?",
+            f"SELECT task_id, task_type, file_name, status, created_time, updated_time, callback_status, biz_type, biz_unique_id, recognition_mode FROM tasks {where_clause} ORDER BY created_time DESC LIMIT ? OFFSET ?",
             (*params, page_size, offset)
         )
 
@@ -1313,7 +1469,8 @@ async def list_tasks_by_app(
                 "updated_time": task[5],
                 "callback_status": task[6],
                 "biz_type": task[7],
-                "biz_unique_id": task[8]
+                "biz_unique_id": task[8],
+                "recognition_mode": task[9]
             })
 
         return {"code": 0, "msg": "查询任务列表成功", "tasks": task_list, "total": total, "page": page,

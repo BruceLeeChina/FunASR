@@ -157,7 +157,88 @@
 </tr>
 </tbody>
 </table>
-<h2 id="3-api">3. API接口列表</h2>
+<h2 id="21_1">2.1 识别模式说明</h2>
+<p>FunASR支持两种识别模式：</p>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>说明</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>default</td>
+<td>标准语音识别模式</td>
+<td>单人语音、音频转文字</td>
+</tr>
+<tr>
+<td>meeting</td>
+<td>会议识别模式</td>
+<td>多人对话、识别说话人信息</td>
+</tr>
+</tbody>
+</table>
+<p><strong>会议识别模式特性：</strong>
+- 支持多人对话场景
+- 自动识别说话人信息（Speaker 1, Speaker 2, ...）
+- 返回对话格式的识别结果
+- 包含每段语音的时间戳信息</p>
+<h2 id="3">3. 识别模式使用说明</h2>
+<h3 id="31-default">3.1 标准识别模式 (default)</h3>
+<p>标准识别模式适用于单人语音识别，提供基本的语音转文字功能。</p>
+<p><strong>请求参数：</strong>
+- <code>recognition_mode</code>: "default" (可选，默认为此模式)</p>
+<p><strong>返回结果格式：</strong></p>
+<pre class="codehilite"><code class="language-json">{
+  &quot;code&quot;: 0,
+  &quot;text&quot;: &quot;识别结果文本&quot;,
+  &quot;sentences&quot;: [
+    {
+      &quot;text&quot;: &quot;第一句&quot;,
+      &quot;start&quot;: 0,
+      &quot;end&quot;: 5
+    },
+    ...
+  ]
+}
+</code></pre>
+
+<h3 id="32-meeting">3.2 会议识别模式 (meeting)</h3>
+<p>会议识别模式专为多人对话场景设计，能够识别不同说话人并返回对话格式的结果。</p>
+<p><strong>请求参数：</strong>
+- <code>recognition_mode</code>: "meeting"</p>
+<p><strong>返回结果格式：</strong></p>
+<pre class="codehilite"><code class="language-json">{
+  &quot;code&quot;: 0,
+  &quot;dialogue&quot;: [
+    {
+      &quot;speaker&quot;: &quot;Speaker 1&quot;,
+      &quot;text&quot;: &quot;大家好，今天我们讨论一下项目进展&quot;,
+      &quot;start_time&quot;: 0.0,
+      &quot;end_time&quot;: 3.5
+    },
+    {
+      &quot;speaker&quot;: &quot;Speaker 2&quot;, 
+      &quot;text&quot;: &quot;好的，我来汇报一下技术方案&quot;,
+      &quot;start_time&quot;: 3.8,
+      &quot;end_time&quot;: 7.2
+    },
+    ...
+  ]
+}
+</code></pre>
+
+<h3 id="33">3.3 识别模式选择建议</h3>
+<ul>
+<li><strong>单人语音</strong> → 使用 <code>default</code> 模式</li>
+<li><strong>多人会议</strong> → 使用 <code>meeting</code> 模式</li>
+<li><strong>播客音频</strong> → 使用 <code>meeting</code> 模式（可识别不同嘉宾）</li>
+<li><strong>演讲录音</strong> → 使用 <code>default</code> 模式</li>
+<li><strong>对话访谈</strong> → 使用 <code>meeting</code> 模式</li>
+</ul>
+<h2 id="4-api">4. API接口列表</h2>
 <h3 id="31">3.1 任务提交接口</h3>
 <h4 id="311">3.1.1 单任务提交</h4>
 <p><strong>接口地址</strong>：<code>POST /submit_task</code></p>
@@ -213,6 +294,12 @@
 <td>string</td>
 <td>否</td>
 <td>业务唯一ID</td>
+</tr>
+<tr>
+<td>recognition_mode</td>
+<td>string</td>
+<td>否</td>
+<td>识别模式：default/meeting，默认default</td>
 </tr>
 </tbody>
 </table>
@@ -285,6 +372,12 @@
 <td>否</td>
 <td>业务唯一ID</td>
 </tr>
+<tr>
+<td>recognition_mode</td>
+<td>string</td>
+<td>否</td>
+<td>识别模式：default/meeting，默认default</td>
+</tr>
 </tbody>
 </table>
 <p><strong>返回结果</strong>：</p>
@@ -330,7 +423,8 @@
   &quot;status&quot;: &quot;pending&quot;,
   &quot;progress&quot;: 0,
   &quot;updated_time&quot;: 1620000000,
-  &quot;callback_status&quot;: &quot;pending&quot;
+  &quot;callback_status&quot;: &quot;pending&quot;,
+  &quot;recognition_mode&quot;: &quot;meeting&quot;
 }
 </code></pre>
 
@@ -371,7 +465,34 @@
     ],
     &quot;code&quot;: 0
   },
-  &quot;callback_status&quot;: &quot;success&quot;
+  &quot;callback_status&quot;: &quot;success&quot;,
+  &quot;recognition_mode&quot;: &quot;default&quot;
+}
+</code></pre>
+
+<p><strong>会议模式返回结果示例：</strong></p>
+<pre class="codehilite"><code class="language-json">{
+  &quot;code&quot;: 0,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;result&quot;: {
+    &quot;dialogue&quot;: [
+      {
+        &quot;speaker&quot;: &quot;Speaker 1&quot;,
+        &quot;text&quot;: &quot;大家好，今天我们讨论一下项目进展&quot;,
+        &quot;start_time&quot;: 0.0,
+        &quot;end_time&quot;: 3.5
+      },
+      {
+        &quot;speaker&quot;: &quot;Speaker 2&quot;, 
+        &quot;text&quot;: &quot;好的，我来汇报一下技术方案&quot;,
+        &quot;start_time&quot;: 3.8,
+        &quot;end_time&quot;: 7.2
+      }
+    ],
+    &quot;code&quot;: 0
+  },
+  &quot;callback_status&quot;: &quot;success&quot;,
+  &quot;recognition_mode&quot;: &quot;meeting&quot;
 }
 </code></pre>
 
@@ -416,7 +537,8 @@
     &quot;error_message&quot;: null,
     &quot;created_time&quot;: 1620000000,
     &quot;updated_time&quot;: 1620000000,
-    &quot;callback_status&quot;: &quot;success&quot;
+    &quot;callback_status&quot;: &quot;success&quot;,
+    &quot;recognition_mode&quot;: &quot;default&quot;
   }
 }
 </code></pre>
@@ -466,7 +588,8 @@
       &quot;status&quot;: &quot;completed&quot;,
       &quot;created_time&quot;: 1620000000,
       &quot;updated_time&quot;: 1620000000,
-      &quot;callback_status&quot;: &quot;success&quot;
+      &quot;callback_status&quot;: &quot;success&quot;,
+      &quot;recognition_mode&quot;: &quot;meeting&quot;
     },
     ...
   ],
@@ -476,7 +599,7 @@
 }
 </code></pre>
 
-<h3 id="33">3.3 批量查询接口</h3>
+<h3 id="33_1">3.3 批量查询接口</h3>
 <h4 id="331">3.3.1 批量查询任务状态</h4>
 <p><strong>接口地址</strong>：<code>POST /batch_get_task_status</code></p>
 <p><strong>请求参数</strong>：</p>
@@ -509,7 +632,8 @@
       &quot;status&quot;: &quot;completed&quot;,
       &quot;progress&quot;: 1.0,
       &quot;updated_time&quot;: 1620000000,
-      &quot;callback_status&quot;: &quot;success&quot;
+      &quot;callback_status&quot;: &quot;success&quot;,
+      &quot;recognition_mode&quot;: &quot;default&quot;
     },
     ...
   ]
@@ -551,7 +675,8 @@
         &quot;sentences&quot;: [],
         &quot;code&quot;: 0
       },
-      &quot;callback_status&quot;: &quot;success&quot;
+      &quot;callback_status&quot;: &quot;success&quot;,
+      &quot;recognition_mode&quot;: &quot;meeting&quot;
     },
     ...
   ]
@@ -716,8 +841,15 @@
 <td>否</td>
 <td>应用ID</td>
 </tr>
+<tr>
+<td>recognition_mode</td>
+<td>string</td>
+<td>否</td>
+<td>识别模式</td>
+</tr>
 </tbody>
 </table>
+<p><strong>注意：</strong> 至少需要提供 <code>biz_unique_id</code> 或 <code>app_id</code> 中的一个参数</p>
 <p><strong>返回结果</strong>：</p>
 <pre class="codehilite"><code class="language-json">{
   &quot;code&quot;: 0,
@@ -741,7 +873,8 @@
     &quot;callback_status&quot;: &quot;success&quot;,
     &quot;app_id&quot;: &quot;app_id_value&quot;,
     &quot;biz_type&quot;: &quot;biz_type_value&quot;,
-    &quot;biz_unique_id&quot;: &quot;biz_unique_id_value&quot;
+    &quot;biz_unique_id&quot;: &quot;biz_unique_id_value&quot;,
+    &quot;recognition_mode&quot;: &quot;default&quot;
   }
 }
 </code></pre>
@@ -772,6 +905,12 @@
 <td>业务类型</td>
 </tr>
 <tr>
+<td>recognition_mode</td>
+<td>string</td>
+<td>否</td>
+<td>识别模式</td>
+</tr>
+<tr>
 <td>page</td>
 <td>int</td>
 <td>否</td>
@@ -799,7 +938,8 @@
       &quot;updated_time&quot;: 1620000000,
       &quot;callback_status&quot;: &quot;success&quot;,
       &quot;biz_type&quot;: &quot;biz_type_value&quot;,
-      &quot;biz_unique_id&quot;: &quot;biz_unique_id_value&quot;
+      &quot;biz_unique_id&quot;: &quot;biz_unique_id_value&quot;,
+      &quot;recognition_mode&quot;: &quot;meeting&quot;
     },
     ...
   ],
@@ -871,10 +1011,114 @@
 </tr>
 </tbody>
 </table>
+<h2 id="6">6. 使用示例</h2>
+<h3 id="61">6.1 标准识别模式示例</h3>
+<p><strong>单任务提交（标准模式）：</strong></p>
+<pre class="codehilite"><code class="language-bash">curl -X POST &quot;http://localhost:8000/submit_task&quot; \
+  -F &quot;file=@test.wav&quot; \
+  -F &quot;file_name=test.wav&quot; \
+  -F &quot;recognition_mode=default&quot;
+</code></pre>
+
+<p><strong>批量任务提交（标准模式）：</strong></p>
+<pre class="codehilite"><code class="language-bash">curl -X POST &quot;http://localhost:8000/batch_operation&quot; \
+  -F &quot;operation=submit&quot; \
+  -F &quot;file_list=[{\&quot;file_url\&quot;:\&quot;http://example.com/audio1.wav\&quot;,\&quot;file_name\&quot;:\&quot;audio1.wav\&quot;},{\&quot;file_url\&quot;:\&quot;http://example.com/audio2.wav\&quot;,\&quot;file_name\&quot;:\&quot;audio2.wav\&quot;}]&quot; \
+  -F &quot;recognition_mode=default&quot;
+</code></pre>
+
+<h3 id="62">6.2 会议识别模式示例</h3>
+<p><strong>单任务提交（会议模式）：</strong></p>
+<pre class="codehilite"><code class="language-bash">curl -X POST &quot;http://localhost:8000/submit_task&quot; \
+  -F &quot;file=@meeting.wav&quot; \
+  -F &quot;file_name=meeting.wav&quot; \
+  -F &quot;recognition_mode=meeting&quot;
+</code></pre>
+
+<p><strong>批量任务提交（会议模式）：</strong></p>
+<pre class="codehilite"><code class="language-bash">curl -X POST &quot;http://localhost:8000/batch_operation&quot; \
+  -F &quot;operation=submit&quot; \
+  -F &quot;file_list=[{\&quot;file_url\&quot;:\&quot;http://example.com/meeting1.wav\&quot;,\&quot;file_name\&quot;:\&quot;meeting1.wav\&quot;}]&quot; \
+  -F &quot;recognition_mode=meeting&quot;
+</code></pre>
+
+<h3 id="63">6.3 查询识别模式任务</h3>
+<p><strong>根据识别模式查询任务列表：</strong></p>
+<pre class="codehilite"><code class="language-bash">curl -X GET &quot;http://localhost:8000/list_tasks_by_app?recognition_mode=meeting&amp;page=1&amp;page_size=10&quot;
+</code></pre>
+
+<h3 id="64">6.4 典型使用场景</h3>
+<p><strong>场景1：播客音频处理</strong>
+- 音频特点：多人对话，有主持人、嘉宾
+- 推荐模式：<code>meeting</code>
+- 理由：能够区分不同说话人，生成对话格式结果</p>
+<p><strong>场景2：会议录音处理</strong>
+- 音频特点：多人会议，需要知道谁在什么时候说了什么
+- 推荐模式：<code>meeting</code>
+- 理由：说话人识别功能，能够生成会议记录格式</p>
+<p><strong>场景3：个人语音笔记</strong>
+- 音频特点：单人录制，主要是备忘信息
+- 推荐模式：<code>default</code>
+- 理由：只需要文字转换，不需要说话人信息</p>
+<p><strong>场景4：演讲录音</strong>
+- 音频特点：单人演讲，内容结构清晰
+- 推荐模式：<code>default</code>
+- 理由：专注于内容识别，效率更高</p>
+<p><strong>场景5：客服通话录音</strong>
+- 音频特点：客服和客户对话
+- 推荐模式：<code>meeting</code>
+- 理由：需要区分客服和客户的话术，便于分析</p>
+<h2 id="7">7. 性能建议</h2>
+<h3 id="71">7.1 识别模式选择建议</h3>
+<table>
+<thead>
+<tr>
+<th>音频特征</th>
+<th>推荐模式</th>
+<th>性能考虑</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>单人语音</td>
+<td>default</td>
+<td>速度更快，资源消耗少</td>
+</tr>
+<tr>
+<td>多人对话</td>
+<td>meeting</td>
+<td>准确识别说话人，但需要更多计算资源</td>
+</tr>
+<tr>
+<td>背景噪音大</td>
+<td>default</td>
+<td>专注于语音识别，减少说话人识别干扰</td>
+</tr>
+<tr>
+<td>音质清晰</td>
+<td>meeting</td>
+<td>充分利用说话人识别功能</td>
+</tr>
+</tbody>
+</table>
+<h3 id="72">7.2 批量处理建议</h3>
+<ol>
+<li><strong>合理设置并发数</strong>：根据服务器配置调整 <code>max_concurrent_tasks</code></li>
+<li><strong>使用批量接口</strong>：批量操作比单次操作效率更高</li>
+<li><strong>文件大小控制</strong>：建议单个音频文件不超过100MB</li>
+<li><strong>格式标准化</strong>：使用WAV格式可获得最佳识别效果</li>
+</ol>
+<h3 id="73">7.3 监控和调试</h3>
+<ol>
+<li><strong>查看任务状态</strong>：使用 <code>/get_task_status</code> 监控处理进度</li>
+<li><strong>批量查询结果</strong>：使用 <code>/batch_get_task_result</code> 批量获取结果</li>
+<li><strong>日志监控</strong>：关注服务器日志，了解处理状态和错误信息</li>
+<li><strong>回调机制</strong>：配置回调URL接收异步处理结果 |</li>
+</ol>
     </article>
     
     <div class="footer">
-        最后更新: 2025-12-18 18:57:26 | 
+        最后更新: 2025-12-31 16:41:59 | 
         <a href="https://github.com/your-repo/tts-api">GitHub</a>
     </div>
     
