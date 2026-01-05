@@ -4,8 +4,8 @@ docker一键启动：
 sudo docker pull registry.cn-hangzhou.aliyuncs.com/funasr_repo/funasr:funasr-runtime-sdk-online-cpu-0.1.13
 
 # 2. 创建模型目录（如果尚未创建）
-mkdir -p /opt/funasr
-cd /opt/funasr && mkdir -p ./funasr-runtime-resources/models
+mkdir -p /opt/funasr-online
+cd /opt/funasr-online && mkdir -p ./funasr-runtime-resources/models
 
 # 3. 后台启动容器并自动运行服务
 sudo docker run -p 10095:10095 -d --name funasr-server \

@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>asr_api_doc.md - ASR API 文档</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.1.0/github-markdown.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github.min.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #24292e;
+            background-color: #fff;
+            margin: 0;
+            padding: 20px;
+        }
+        .markdown-body {
+            box-sizing: border-box;
+            min-width: 200px;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 45px;
+        }
+        @media (max-width: 767px) {
+            .markdown-body {
+                padding: 15px;
+            }
+        }
+        .nav {
+            background-color: #f6f8fa;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+        }
+        .nav a {
+            margin-right: 15px;
+            text-decoration: none;
+            color: #0366d6;
+        }
+        .nav a:hover {
+            text-decoration: underline;
+        }
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eaecef;
+            color: #6a737d;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <article class="markdown-body">
+        <p>根据测试脚本的实际情况，我对API文档进行以下重要更新和修正：</p>
+<h1 id="funasr-websocket-api">FunASR 语音识别 WebSocket API 接口文档</h1>
+<h2 id="_1">概述</h2>
+<p>FunASR（Fundamental Audio Speech Recognition）是由阿里巴巴达摩院推出的语音识别开源工具包。本API提供基于WebSocket的实时语音识别服务，支持多种工作模式（2pass、online、offline），集成VAD（语音活动检测）、ASR（自动语音识别）和标点模型。</p>
+<h2 id="_2">基础信息</h2>
+<ul>
+<li><strong>协议</strong>: WebSocket (WSS)</li>
+<li><strong>地址</strong>: <code>wss://192.168.21.164:10095/</code> (已确认可用)</li>
+<li><strong>备用地址</strong>: <code>wss://192.168.21.164:84/ws</code> (HTML页面使用)</li>
+<li><strong>端口</strong>: 10095 (主), 84 (备用)</li>
+<li><strong>安全</strong>: SSL/TLS 加密（测试中可禁用证书验证）</li>
+<li><strong>编码</strong>: UTF-8</li>
+<li><strong>音频格式</strong>: 16kHz, 16-bit, 单声道 PCM (必须)</li>
+</ul>
+<hr />
+<h2 id="_3">接口概览</h2>
+<h3 id="1-websocket">1. WebSocket 连接建立</h3>
+<p>建立与语音识别服务的WebSocket连接。</p>
+<h3 id="2">2. 语音识别开始</h3>
+<p>发送控制消息配置识别参数并开始传输音频数据。</p>
+<h3 id="3">3. 语音识别停止</h3>
+<p>发送停止信号结束语音识别。</p>
+<h3 id="4">4. 识别结果接收</h3>
+<p>接收服务端返回的语音识别结果。</p>
+<hr />
+<h2 id="_4">详细接口说明</h2>
+<h3 id="1-websocket_1">1. WebSocket 连接建立</h3>
+<h4 id="_5">接口信息</h4>
+<ul>
+<li><strong>URL</strong>: <code>wss://192.168.21.164:10095/</code></li>
+<li><strong>协议</strong>: WebSocket over TLS</li>
+<li><strong>连接限制</strong>: 目前仅支持单客户端连接</li>
+</ul>
+<h4 id="python-">连接示例 (Python - 已验证)</h4>
+<pre class="codehilite"><code class="language-python">import asyncio
+import websockets
+import ssl
+
+async def connect_to_server():
+    url = &quot;wss://192.168.21.164:10095/&quot;
+
+    # 创建不验证证书的SSL上下文
+    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+
+    try:
+        async with websockets.connect(
+            url, 
+            ssl=ssl_context,
+            open_timeout=10
+        ) as websocket:
+            print(&quot;✅ WebSocket连接成功&quot;)
+            return websocket
+    except Exception as e:
+        print(f&quot;❌ 连接失败: {e}&quot;)
+        return None
+</code></pre>
+
+<h4 id="javascript">连接示例 (JavaScript)</h4>
+<pre class="codehilite"><code class="language-javascript">// JavaScript 示例
+const ws = new WebSocket('wss://192.168.21.164:10095/');
+
+ws.onopen = function() {
+    console.log('WebSocket 连接已建立');
+    // 连接成功后可以发送配置信息
+};
+
+ws.onerror = function(error) {
+    console.error('WebSocket 连接错误:', error);
+};
+
+ws.onclose = function() {
+    console.log('WebSocket 连接已关闭');
+};
+</code></pre>
+
+<h4 id="_6">注意事项</h4>
+<ul>
+<li>需要SSL证书（服务端已配置自签名证书）</li>
+<li>浏览器首次访问需授权证书</li>
+<li>目前仅支持单客户端连接，新连接会关闭旧连接</li>
+</ul>
+<hr />
+<h3 id="2_1">2. 语音识别开始</h3>
+<h4 id="21">2.1 发送控制配置消息</h4>
+<p>在开始发送音频数据前，需要发送JSON格式的控制消息配置识别参数。</p>
+<h5 id="_7">消息格式 (根据测试脚本验证)</h5>
+<pre class="codehilite"><code class="language-json">{
+    &quot;is_speaking&quot;: true,
+    &quot;wav_name&quot;: &quot;test_audio&quot;,
+    &quot;mode&quot;: &quot;online&quot;,
+    &quot;chunk_size&quot;: [5, 10, 5],
+    &quot;encoder_chunk_look_back&quot;: 4,
+    &quot;decoder_chunk_look_back&quot;: 0
+}
+</code></pre>
+
+<h5 id="_8">参数说明</h5>
+<table>
+<thead>
+<tr>
+<th>参数名</th>
+<th>类型</th>
+<th>必填</th>
+<th>默认值</th>
+<th>描述</th>
+<th>状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>is_speaking</code></td>
+<td>boolean</td>
+<td>是</td>
+<td>true</td>
+<td>是否正在说话，用于控制流式识别</td>
+<td>✅ 已验证</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td>string</td>
+<td>是</td>
+<td>"online"</td>
+<td>识别模式：<code>2pass</code>、<code>online</code>、<code>offline</code></td>
+<td>✅ 已验证</td>
+</tr>
+<tr>
+<td><code>wav_name</code></td>
+<td>string</td>
+<td>否</td>
+<td>"test_audio"</td>
+<td>音频名称标识</td>
+<td>✅ 已验证</td>
+</tr>
+<tr>
+<td><code>chunk_size</code></td>
+<td>array</td>
+<td>否</td>
+<td>[5, 10, 5]</td>
+<td>分块大小配置，数组格式</td>
+<td>⚠️ 已验证但需注意</td>
+</tr>
+<tr>
+<td><code>chunk_interval</code></td>
+<td>integer</td>
+<td>否</td>
+<td>10</td>
+<td>音频分块间隔（单位：毫秒）</td>
+<td>❓ 未验证</td>
+</tr>
+<tr>
+<td><code>encoder_chunk_look_back</code></td>
+<td>integer</td>
+<td>否</td>
+<td>4</td>
+<td>编码器回看块数</td>
+<td>⚠️ 已验证但需注意</td>
+</tr>
+<tr>
+<td><code>decoder_chunk_look_back</code></td>
+<td>integer</td>
+<td>否</td>
+<td>0</td>
+<td>解码器回看块数</td>
+<td>⚠️ 已验证但需注意</td>
+</tr>
+<tr>
+<td><code>hotword</code></td>
+<td>string</td>
+<td>否</td>
+<td>""</td>
+<td>热词配置，每行一个，格式："关键词 权重"</td>
+<td>❓ 未验证</td>
+</tr>
+</tbody>
+</table>
+<h5 id="_9">模式说明</h5>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>描述</th>
+<th>适用场景</th>
+<th>状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2pass</code></td>
+<td>双通模式（流式+非流式）</td>
+<td>实时性要求高且需要高准确率</td>
+<td>⚠️ 已验证但结果待确认</td>
+</tr>
+<tr>
+<td><code>online</code></td>
+<td>纯流式模式</td>
+<td>低延迟实时识别</td>
+<td>✅ 已验证</td>
+</tr>
+<tr>
+<td><code>offline</code></td>
+<td>纯非流式模式</td>
+<td>音频文件转录，高准确率</td>
+<td>⚠️ 已验证但结果待确认</td>
+</tr>
+</tbody>
+</table>
+<h4 id="22">2.2 发送音频数据</h4>
+<p>配置完成后，开始发送二进制音频数据。</p>
+<h5 id="_10">音频格式要求 (必须)</h5>
+<ul>
+<li><strong>采样率</strong>: 16kHz (必须，其他采样率需重采样)</li>
+<li><strong>位深度</strong>: 16-bit (必须)</li>
+<li><strong>声道</strong>: 单声道 (mono) (必须)</li>
+<li><strong>编码</strong>: PCM (必须)</li>
+<li><strong>分块大小</strong>: 320字节 (对应10ms音频，16000Hz * 0.01s * 2bytes)</li>
+</ul>
+<h5 id="_11">音频重采样 (重要)</h5>
+<p>如果音频不是16kHz，必须重采样：</p>
+<pre class="codehilite"><code class="language-python">import numpy as np
+from scipy import signal
+
+def resample_audio_to_16000(audio_data: bytes, original_rate: int) -&gt; bytes:
+    &quot;&quot;&quot;将任意采样率的音频重采样到16000Hz&quot;&quot;&quot;
+    # 转换为float32
+    audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+
+    # 计算重采样因子
+    num_samples = int(len(audio_array) * 16000 / original_rate)
+
+    # 重采样
+    resampled_audio = signal.resample(audio_array, num_samples)
+
+    # 转换回16-bit PCM
+    resampled_audio_int16 = (resampled_audio * 32767).astype(np.int16)
+
+    return resampled_audio_int16.tobytes()
+</code></pre>
+
+<h5 id="_12">发送频率</h5>
+<ul>
+<li>根据 <code>chunk_interval</code> 参数决定</li>
+<li>默认每10ms发送一次</li>
+</ul>
+<h5 id="python-_1">发送示例 (Python - 已验证)</h5>
+<pre class="codehilite"><code class="language-python">async def send_audio_stream(websocket, audio_data: bytes, sample_rate: int = 16000):
+    &quot;&quot;&quot;流式发送音频数据&quot;&quot;&quot;
+    # 确保采样率为16000Hz
+    if sample_rate != 16000:
+        audio_data = resample_audio_to_16000(audio_data, sample_rate)
+        sample_rate = 16000
+
+    # 分块大小：16000Hz * 0.01s * 2bytes = 320字节
+    chunk_size = int(sample_rate * 0.01 * 2)
+    total_chunks = len(audio_data) // chunk_size
+
+    print(f&quot;开始发送音频：共{total_chunks}块，每块{chunk_size}字节&quot;)
+
+    for i in range(total_chunks):
+        start = i * chunk_size
+        end = start + chunk_size
+        chunk = audio_data[start:end]
+
+        # 发送音频块
+        await websocket.send(chunk)
+
+        # 控制发送速率（10ms间隔）
+        await asyncio.sleep(0.01)
+</code></pre>
+
+<hr />
+<h3 id="3_1">3. 语音识别停止</h3>
+<h4 id="31">3.1 发送停止信号</h4>
+<p>发送 <code>is_speaking: false</code> 控制消息，通知服务端说话结束。</p>
+<h5 id="_13">停止消息格式</h5>
+<pre class="codehilite"><code class="language-json">{
+    &quot;is_speaking&quot;: false
+}
+</code></pre>
+
+<h4 id="32-websocket">3.2 关闭WebSocket连接</h4>
+<p>识别完成后，可以关闭WebSocket连接。</p>
+<h5 id="_14">关闭连接示例</h5>
+<pre class="codehilite"><code class="language-javascript">// 发送停止信号
+ws.send(JSON.stringify({ &quot;is_speaking&quot;: false }));
+
+// 等待最后一轮识别结果
+setTimeout(() =&gt; {
+    ws.close();
+}, 1000);
+</code></pre>
+
+<hr />
+<h3 id="4_1">4. 识别结果接收</h3>
+<h4 id="_15">结果消息格式</h4>
+<p>服务端返回的识别结果为JSON格式：</p>
+<pre class="codehilite"><code class="language-json">{
+    &quot;mode&quot;: &quot;2pass-online&quot;,
+    &quot;text&quot;: &quot;你好，这是一个测试。&quot;,
+    &quot;wav_name&quot;: &quot;test_audio&quot;,
+    &quot;is_final&quot;: false
+}
+</code></pre>
+
+<h5 id="_16">结果参数说明</h5>
+<table>
+<thead>
+<tr>
+<th>参数名</th>
+<th>类型</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mode</code></td>
+<td>string</td>
+<td>识别模式：<code>2pass-online</code>、<code>2pass-offline</code>、<code>online</code>、<code>offline</code></td>
+</tr>
+<tr>
+<td><code>text</code></td>
+<td>string</td>
+<td>识别出的文本内容</td>
+</tr>
+<tr>
+<td><code>wav_name</code></td>
+<td>string</td>
+<td>音频名称标识</td>
+</tr>
+<tr>
+<td><code>is_final</code></td>
+<td>boolean</td>
+<td>是否为最终结果（True表示语音段结束）</td>
+</tr>
+</tbody>
+</table>
+<h4 id="_17">结果接收示例</h4>
+<pre class="codehilite"><code class="language-javascript">ws.onmessage = function(event) {
+    if (typeof event.data === 'string') {
+        // 解析JSON结果
+        const result = JSON.parse(event.data);
+        console.log(`模式: ${result.mode}`);
+        console.log(`识别结果: ${result.text}`);
+        console.log(`是否最终: ${result.is_final}`);
+
+        // 更新UI显示
+        document.getElementById('result').innerText += result.text + '\n';
+    }
+};
+</code></pre>
+
+<h4 id="_18">结果类型说明</h4>
+<table>
+<thead>
+<tr>
+<th>模式组合</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2pass-online</code></td>
+<td>2pass模式下的流式识别结果（中间结果）</td>
+</tr>
+<tr>
+<td><code>2pass-offline</code></td>
+<td>2pass模式下的非流式识别结果（最终结果）</td>
+</tr>
+<tr>
+<td><code>online</code></td>
+<td>纯流式模式结果</td>
+</tr>
+<tr>
+<td><code>offline</code></td>
+<td>纯非流式模式结果</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p>=========================================================== END ====================================================================</p>
+<h2 id="_19">完整调用流程示例</h2>
+<h3 id="python">Python 完整示例 (基于测试脚本)</h3>
+<pre class="codehilite"><code class="language-python">import asyncio
+import websockets
+import json
+import ssl
+import wave
+import numpy as np
+from scipy import signal
+
+class ASRClientPython:
+    &quot;&quot;&quot;基于测试脚本的完整ASR客户端&quot;&quot;&quot;
+    def __init__(self, server_url: str = &quot;wss://192.168.21.164:10095/&quot;):
+        self.server_url = server_url
+        self.websocket = None
+        self.is_recording = False
+        self.results_received = []
+
+    async def connect(self) -&gt; bool:
+        &quot;&quot;&quot;连接WebSocket服务器&quot;&quot;&quot;
+        try:
+            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+
+            self.websocket = await websockets.connect(
+                self.server_url,
+                ssl=ssl_context,
+                open_timeout=30
+            )
+            print(f&quot;✅ 已连接到ASR服务器: {self.server_url}&quot;)
+            return True
+        except Exception as e:
+            print(f&quot;❌ 连接失败: {e}&quot;)
+            return False
+
+    async def start_recognition(self, audio_file_path: str, mode: str = &quot;online&quot;) -&gt; bool:
+        &quot;&quot;&quot;开始语音识别&quot;&quot;&quot;
+        if not self.websocket:
+            print(&quot;❌ 未连接到服务器&quot;)
+            return False
+
+        # 1. 加载音频文件
+        print(&quot;🎵 加载音频文件...&quot;)
+        try:
+            with wave.open(audio_file_path, 'rb') as wav_file:
+                params = wav_file.getparams()
+                original_rate = params.framerate
+                print(f&quot;   采样率: {original_rate} Hz&quot;)
+                print(f&quot;   声道数: {params.nchannels}&quot;)
+                print(f&quot;   位深度: {params.sampwidth * 8} bit&quot;)
+
+                # 读取音频数据
+                audio_data = wav_file.readframes(params.nframes)
+
+                # 如果是立体声，转换为单声道
+                if params.nchannels == 2:
+                    audio_array = np.frombuffer(audio_data, dtype=np.int16)
+                    audio_array = audio_array.reshape(-1, 2).mean(axis=1).astype(np.int16)
+                    audio_data = audio_array.tobytes()
+        except Exception as e:
+            print(f&quot;❌ 加载音频文件失败: {e}&quot;)
+            return False
+
+        # 2. 发送配置
+        print(&quot;📤 发送配置...&quot;)
+        config = {
+            &quot;is_speaking&quot;: True,
+            &quot;wav_name&quot;: audio_file_path,
+            &quot;mode&quot;: mode,
+            &quot;chunk_size&quot;: [5, 10, 5],
+            &quot;encoder_chunk_look_back&quot;: 4,
+            &quot;decoder_chunk_look_back&quot;: 0
+        }
+
+        await self.websocket.send(json.dumps(config))
+        self.is_recording = True
+
+        # 3. 发送音频（自动重采样到16000Hz）
+        print(&quot;📤 发送音频数据...&quot;)
+        await self.send_audio_data(audio_data, original_rate)
+
+        return True
+
+    async def send_audio_data(self, audio_data: bytes, sample_rate: int):
+        &quot;&quot;&quot;发送音频数据&quot;&quot;&quot;
+        # 确保采样率为16000Hz
+        if sample_rate != 16000:
+            audio_data = self.resample_audio_to_16000(audio_data, sample_rate)
+            sample_rate = 16000
+
+        # 分块发送
+        chunk_size = int(sample_rate * 0.01 * 2)  # 10ms块大小
+        total_chunks = len(audio_data) // chunk_size
+
+        print(f&quot;  总大小: {len(audio_data)} 字节&quot;)
+        print(f&quot;  采样率: {sample_rate} Hz&quot;)
+        print(f&quot;  块大小: {chunk_size} 字节 (10ms)&quot;)
+        print(f&quot;  总块数: {total_chunks}&quot;)
+
+        for i in range(total_chunks):
+            if not self.is_recording:
+                break
+
+            start = i * chunk_size
+            end = start + chunk_size
+            chunk = audio_data[start:end]
+
+            await self.websocket.send(chunk)
+            await asyncio.sleep(0.01)  # 10ms间隔
+
+            # 显示进度
+            if i % 100 == 0:
+                progress = (i / total_chunks) * 100
+                print(f&quot;  进度: {progress:.1f}%&quot;)
+
+        print(&quot;✅ 音频发送完成&quot;)
+
+    def resample_audio_to_16000(self, audio_data: bytes, original_rate: int) -&gt; bytes:
+        &quot;&quot;&quot;重采样音频到16000Hz&quot;&quot;&quot;
+        audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+        num_samples = int(len(audio_array) * 16000 / original_rate)
+        resampled_audio = signal.resample(audio_array, num_samples)
+        resampled_audio_int16 = (resampled_audio * 32767).astype(np.int16)
+        return resampled_audio_int16.tobytes()
+
+    async def stop_recognition(self):
+        &quot;&quot;&quot;停止语音识别&quot;&quot;&quot;
+        if not self.is_recording:
+            return
+
+        # 发送停止信号
+        stop_msg = {&quot;is_speaking&quot;: False}
+        await self.websocket.send(json.dumps(stop_msg))
+        print(&quot;📤 已发送停止信号&quot;)
+
+        self.is_recording = False
+
+        # 等待最终结果
+        print(&quot;⏳ 等待服务器发送最终结果...&quot;)
+        await asyncio.sleep(3)
+
+    async def disconnect(self):
+        &quot;&quot;&quot;断开连接&quot;&quot;&quot;
+        if self.websocket:
+            await self.websocket.close()
+            self.websocket = None
+        print(&quot;🔌 连接已断开&quot;)
+
+    async def receive_results(self):
+        &quot;&quot;&quot;接收识别结果&quot;&quot;&quot;
+        try:
+            while True:
+                message = await self.websocket.recv()
+                if isinstance(message, str):
+                    result = json.loads(message)
+                    self.results_received.append(result)
+                    self.handle_result(result)
+        except websockets.exceptions.ConnectionClosed:
+            print(&quot;连接已关闭&quot;)
+        except Exception as e:
+            print(f&quot;接收结果错误: {e}&quot;)
+
+    def handle_result(self, result: dict):
+        &quot;&quot;&quot;处理识别结果&quot;&quot;&quot;
+        mode = result.get(&quot;mode&quot;, &quot;&quot;)
+        text = result.get(&quot;text&quot;, &quot;&quot;)
+        is_final = result.get(&quot;is_final&quot;, False)
+
+        if is_final:
+            print(f&quot;✅ [最终结果] {text}&quot;)
+        else:
+            print(f&quot;⏳ [中间结果] {text}&quot;)
+
+# 使用示例
+async def main():
+    # 创建客户端
+    client = ASRClientPython()
+
+    # 连接服务器
+    if await client.connect():
+        # 开始识别
+        await client.start_recognition(&quot;test.wav&quot;, mode=&quot;online&quot;)
+
+        # 停止识别
+        await client.stop_recognition()
+
+        # 断开连接
+        await client.disconnect()
+
+        # 打印所有结果
+        print(&quot;\n📊 识别结果总结:&quot;)
+        for i, result in enumerate(client.results_received, 1):
+            print(f&quot;{i}. [{result['mode']}] {result['text']}&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    asyncio.run(main())
+</code></pre>
+
+<hr />
+<h2 id="_20">错误处理与调试</h2>
+<h3 id="_21">当前测试状态</h3>
+<p>根据测试结果，以下问题已确认：
+1. ✅ WebSocket连接成功
+2. ✅ 配置消息可以发送
+3. ✅ 音频数据可以传输
+4. ❌ <strong>未收到任何识别结果</strong></p>
+<h3 id="_22">可能的原因及解决方案</h3>
+<table>
+<thead>
+<tr>
+<th>问题</th>
+<th>可能原因</th>
+<th>解决方案</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>连接成功但无识别结果</td>
+<td>1. 音频采样率不正确<br>2. VAD未检测到语音<br>3. ASR模型未正确加载<br>4. 服务器配置问题</td>
+<td>1. 确保音频为16000Hz<br>2. 增加音频音量或清晰度<br>3. 检查服务器日志<br>4. 尝试不同的识别模式</td>
+</tr>
+<tr>
+<td>音频发送但无响应</td>
+<td>1. 音频格式不正确<br>2. 分块大小不正确<br>3. 发送频率过快/过慢</td>
+<td>1. 确保为16-bit PCM<br>2. 使用320字节分块<br>3. 控制10ms发送间隔</td>
+</tr>
+<tr>
+<td>SSL证书问题</td>
+<td>自签名证书不被信任</td>
+<td>在测试环境中禁用证书验证</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_23">调试建议</h3>
+<ol>
+<li><strong>检查音频格式</strong>：确保为16000Hz, 16-bit, 单声道PCM</li>
+<li><strong>查看服务器日志</strong>：检查ASR模型是否正常加载</li>
+<li><strong>尝试不同模式</strong>：分别测试online、2pass、offline模式</li>
+<li><strong>简化测试</strong>：使用生成的测试音频而非真实音频</li>
+<li><strong>网络抓包</strong>：使用Wireshark确认数据是否正确传输</li>
+</ol>
+<hr />
+<h2 id="_24">性能参数</h2>
+<h3 id="_25">推荐配置</h3>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>推荐值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>音频采样率</td>
+<td>16000 Hz</td>
+<td><strong>必须</strong>，否则需重采样</td>
+</tr>
+<tr>
+<td>音频格式</td>
+<td>16-bit PCM</td>
+<td><strong>必须</strong></td>
+</tr>
+<tr>
+<td>分块大小</td>
+<td>320字节</td>
+<td>对应10ms音频（16000 * 0.01 * 2）</td>
+</tr>
+<tr>
+<td>发送间隔</td>
+<td>10ms</td>
+<td>与分块大小匹配</td>
+</tr>
+<tr>
+<td>识别模式</td>
+<td>online</td>
+<td>实时性最佳</td>
+</tr>
+<tr>
+<td>VAD灵敏度</td>
+<td>默认</td>
+<td>服务端自动调整</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_26">延迟参考</h3>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>流式延迟</th>
+<th>最终结果延迟</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>online</code></td>
+<td>100-300ms</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td><code>2pass</code></td>
+<td>100-300ms</td>
+<td>500-1000ms</td>
+</tr>
+<tr>
+<td><code>offline</code></td>
+<td>N/A</td>
+<td>音频长度+处理时间</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="_27">注意事项</h2>
+<ol>
+<li><strong>音频采样率必须为16000Hz</strong>：这是最关键的要求，其他采样率无法识别</li>
+<li><strong>单连接限制</strong>：目前服务端仅支持单客户端连接</li>
+<li><strong>SSL证书</strong>：首次连接需要在浏览器中授权自签名证书</li>
+<li><strong>音频格式</strong>：必须为16-bit PCM单声道格式</li>
+<li><strong>VAD敏感度</strong>：在嘈杂环境中可能需要调整VAD参数</li>
+<li><strong>资源占用</strong>：长时间运行建议监控服务端资源使用情况</li>
+</ol>
+<hr />
+<h2 id="_28">服务管理</h2>
+<h3 id="_29">启动服务</h3>
+<pre class="codehilite"><code class="language-bash"># 进入项目目录
+cd /path/to/funasr_wss_server
+
+# 启动服务（使用SSL）
+python funasr_wss_server.py \
+  --host 192.168.21.164 \
+  --port 10095 \
+  --certfile ../../ssl_key/server.crt \
+  --keyfile ../../ssl_key/server.key
+</code></pre>
+
+<h3 id="_30">停止服务</h3>
+<pre class="codehilite"><code class="language-bash"># 查找进程ID
+ps aux | grep funasr_wss_server
+
+# 停止服务
+kill [PID]
+</code></pre>
+
+<h3 id="_31">查看日志</h3>
+<pre class="codehilite"><code class="language-bash"># 查看服务输出
+tail -f /var/log/funasr_server.log
+</code></pre>
+
+<hr />
+<p><strong>文档版本</strong>: 1.1 (基于测试结果修订)<br />
+<strong>最后更新</strong>: 2025-12-12<br />
+<strong>测试状态</strong>: 连接和音频传输正常，识别结果待确认<br />
+<strong>维护团队</strong>: FunASR 开发团队</p>
+    </article>
+    
+    <div class="footer">
+        最后更新: 2025-12-12 15:36:16 | 
+        <a href="https://github.com/your-repo/tts-api">GitHub</a>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</body>
+</html>
