@@ -11,7 +11,7 @@ import ssl
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--host", type=str, default="10.1.102.169", required=False, help="host ip, localhost, 10.1.102.169"
+    "--host", type=str, default="127.0.0.1", required=False, help="host ip, 0.0.0.0 or localhost"
 )
 parser.add_argument("--port", type=int, default=10095, required=False, help="grpc server port")
 parser.add_argument(

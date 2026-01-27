@@ -255,7 +255,9 @@ logging.basicConfig(
 async def download_file(url: str, save_path: str) -> bool:
     """下载文件"""
     try:
-        async with aiohttp.ClientSession() as session:
+        # 创建不验证SSL证书的会话
+        connector = aiohttp.TCPConnector(ssl=False)
+        async with aiohttp.ClientSession(connector=connector) as session:
             async with session.get(url) as response:
                 if response.status == 200:
                     async with aiofiles.open(save_path, 'wb') as f:
@@ -305,8 +307,9 @@ async def send_callback_notification(task_id: str, callback_url: str) -> bool:
         elif status == TaskStatus.FAILED.value and error_msg:
             callback_data["error_msg"] = error_msg
 
-        # 发送POST请求
-        async with aiohttp.ClientSession() as session:
+        # 创建不验证SSL证书的会话
+        connector = aiohttp.TCPConnector(ssl=False)
+        async with aiohttp.ClientSession(connector=connector) as session:
             async with session.post(callback_url, json=callback_data, timeout=10) as response:
                 if response.status == 200:
                     # 更新回调状态为成功
