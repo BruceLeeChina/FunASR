@@ -15,7 +15,7 @@ pip install -r requirements.txt
 ### 2.2 启动服务
 
 ```bash
-python server.py --host 0.0.0.0 --port 8000 --device cpu --ngpu 0
+python server.py --host 0.0.0.0 --port 8002 --device cpu --ngpu 0
 ```
 
 ### 2.3 主要参数说明
